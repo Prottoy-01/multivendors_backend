@@ -23,7 +23,7 @@ Route::post('/vendor/register', [AuthController::class, 'registerVendor']);
 Route::post('/forgot-password', [PasswordController::class, 'forgot']);
 Route::post('/reset-password', [PasswordController::class, 'reset']);
 
-// Public product listing
+// Public product listing (multi-image supported)
 Route::get('/products', [ProductController::class, 'index']);
 
 /*
@@ -36,7 +36,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/change-password', [PasswordController::class, 'change']);
-
 
     /*
     |--------------------------------------------------------------------------
@@ -63,17 +62,18 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     |--------------------------------------------------------------------------
-    | Vendor Routes
+    | Vendor Routes (multi-image product support)
     |--------------------------------------------------------------------------
     */
     Route::middleware(VendorMiddleware::class)->group(function () {
+        // Vendor Profile
         Route::get('/vendor/profile', [AuthController::class, 'vendorProfile']);
         Route::put('/vendor/profile', [AuthController::class, 'updateVendorProfile']);
 
-        // Product CRUD
-        Route::post('/products', [ProductController::class, 'store']);
-        Route::put('/products/{id}', [ProductController::class, 'update']);
-        Route::delete('/products/{id}', [ProductController::class, 'destroy']);
+        // Product CRUD (multi-images supported)
+        Route::post('/products', [ProductController::class, 'store']);       // Create product
+        Route::put('/products/{id}', [ProductController::class, 'update']); // Update product (add/remove images)
+        Route::delete('/products/{id}', [ProductController::class, 'destroy']); // Delete product and all images
 
         // Vendor order status update
         Route::put('/orders/{id}/status', [OrderController::class, 'updateStatus']);
@@ -93,8 +93,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // Orders
     Route::post('/checkout', [OrderController::class, 'placeOrder']);
     Route::get('/orders', [OrderController::class, 'myOrders']);
-
-
 
     // Addresses
     Route::get('/addresses', [AddressController::class, 'index']);

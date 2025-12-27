@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use App\Models\Product;
+use App\Models\ProductImage;
 use App\Models\Vendor;
 
 class ProductController extends Controller
@@ -13,9 +14,16 @@ class ProductController extends Controller
     // Public: list products
     public function index()
     {
-        return response()->json(
-            Product::with('vendor', 'category')->paginate(10)
-        );
+        $products = Product::with(['vendor', 'category', 'images'])->paginate(10);
+
+        $products->getCollection()->transform(function ($product) {
+            $product->images_url = $product->images->map(function ($img) {
+                return asset('storage/' . $img->image_path);
+            });
+            return $product;
+        });
+
+        return response()->json($products);
     }
 
     // Vendor: create product
@@ -27,7 +35,7 @@ class ProductController extends Controller
             'price' => 'required|numeric|min:0',
             'stock' => 'required|integer|min:0',
             'category_id' => 'required|exists:categories,id',
-            'image' => 'nullable|image|max:2048',
+            'images.*' => 'nullable|image|mimes:jpg,png,webp|max:2048',
 
             // Offer fields
             'has_offer' => 'sometimes|boolean',
@@ -38,14 +46,9 @@ class ProductController extends Controller
         ]);
 
         $vendor = Vendor::where('user_id', $request->user()->id)->first();
-
         if (!$vendor || $vendor->status !== 'approved') {
             return response()->json(['message' => 'Vendor not approved'], 403);
         }
-
-        $imagePath = $request->hasFile('image')
-            ? $request->file('image')->store('products', 'public')
-            : null;
 
         $product = Product::create([
             'vendor_id' => $vendor->id,
@@ -54,9 +57,6 @@ class ProductController extends Controller
             'description' => $request->description,
             'price' => $request->price,
             'stock' => $request->stock,
-            'image' => $imagePath,
-
-            // Offer fields
             'has_offer' => $request->has_offer ?? false,
             'discount_type' => $request->discount_type,
             'discount_value' => $request->discount_value,
@@ -64,9 +64,20 @@ class ProductController extends Controller
             'offer_end' => $request->offer_end,
         ]);
 
+        // Save multiple images
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $key => $file) {
+                $path = $file->store('products', 'public');
+                $product->images()->create([
+                    'image_path' => $path,
+                    'is_main' => $key === 0
+                ]);
+            }
+        }
+
         return response()->json([
             'message' => 'Product created successfully',
-            'product' => $product
+            'product' => $product->load('images')
         ], 201);
     }
 
@@ -75,7 +86,6 @@ class ProductController extends Controller
     {
         $product = Product::findOrFail($id);
         $vendor = Vendor::where('user_id', $request->user()->id)->first();
-
         if (!$vendor || $product->vendor_id !== $vendor->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
@@ -86,7 +96,8 @@ class ProductController extends Controller
             'price' => 'sometimes|numeric|min:0',
             'stock' => 'sometimes|integer|min:0',
             'category_id' => 'sometimes|exists:categories,id',
-            'image' => 'nullable|image|max:2048',
+            'images.*' => 'nullable|image|mimes:jpg,png,webp|max:2048',
+            'remove_images' => 'sometimes|array', // IDs of images to delete
 
             // Offer fields
             'has_offer' => 'sometimes|boolean',
@@ -96,31 +107,37 @@ class ProductController extends Controller
             'offer_end' => 'nullable|date|after:offer_start',
         ]);
 
-        if ($request->hasFile('image')) {
-            if ($product->image) {
-                Storage::disk('public')->delete($product->image);
+        // Remove selected images
+        if ($request->has('remove_images')) {
+            foreach ($request->remove_images as $imgId) {
+                $img = $product->images()->find($imgId);
+                if ($img) {
+                    Storage::disk('public')->delete($img->image_path);
+                    $img->delete();
+                }
             }
-            $product->image = $request->file('image')->store('products', 'public');
         }
 
-        $product->fill($request->only([
-            'name',
-            'description',
-            'price',
-            'stock',
-            'category_id',
-            'has_offer',
-            'discount_type',
-            'discount_value',
-            'offer_start',
-            'offer_end',
-        ]));
+        // Add new images
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $file) {
+                $path = $file->store('products', 'public');
+                $product->images()->create([
+                    'image_path' => $path,
+                    'is_main' => false
+                ]);
+            }
+        }
 
-        $product->save();
+        // Update product info
+        $product->update($request->only([
+            'name', 'description', 'price', 'stock', 'category_id',
+            'has_offer', 'discount_type', 'discount_value', 'offer_start', 'offer_end'
+        ]));
 
         return response()->json([
             'message' => 'Product updated successfully',
-            'product' => $product
+            'product' => $product->load('images')
         ]);
     }
 
@@ -129,13 +146,13 @@ class ProductController extends Controller
     {
         $product = Product::findOrFail($id);
         $vendor = Vendor::where('user_id', $request->user()->id)->first();
-
         if (!$vendor || $product->vendor_id !== $vendor->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        if ($product->image) {
-            Storage::disk('public')->delete($product->image);
+        // Delete all images
+        foreach ($product->images as $img) {
+            Storage::disk('public')->delete($img->image_path);
         }
 
         $product->delete();
