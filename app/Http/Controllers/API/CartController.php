@@ -25,7 +25,7 @@ class CartController extends Controller
             ->with('items.product')
             ->first();
 
-        if (!$cart) {
+        if (!$cart || $cart->items->count() === 0) {
             return response()->json(['message' => 'Cart is empty'], 200);
         }
 
@@ -41,9 +41,14 @@ class CartController extends Controller
         ]);
 
         $cart = $this->getUserCart($request->user()->id);
+        $product = Product::findOrFail($request->product_id);
+
+        // Store prices at the moment of adding to cart
+        $originalPrice = $product->price;
+        $finalPrice = $product->final_price;
 
         $item = CartItem::where('cart_id', $cart->id)
-                        ->where('product_id', $request->product_id)
+                        ->where('product_id', $product->id)
                         ->first();
 
         if ($item) {
@@ -52,8 +57,10 @@ class CartController extends Controller
         } else {
             CartItem::create([
                 'cart_id' => $cart->id,
-                'product_id' => $request->product_id,
-                'quantity' => $request->quantity
+                'product_id' => $product->id,
+                'quantity' => $request->quantity,
+                'price' => $originalPrice,   // Original price
+                'final_price' => $finalPrice, // Price with offer applied
             ]);
         }
 

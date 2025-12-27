@@ -6,8 +6,11 @@ use App\Http\Controllers\API\CategoryController;
 use App\Http\Controllers\API\ProductController;
 use App\Http\Controllers\API\CartController;
 use App\Http\Controllers\API\OrderController;
+use App\Http\Controllers\API\ProfileController;
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\VendorMiddleware;
+use App\Http\Controllers\API\PasswordController;
+use App\Http\Controllers\API\AddressController;
 
 /*
 |--------------------------------------------------------------------------
@@ -17,6 +20,8 @@ use App\Http\Middleware\VendorMiddleware;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/vendor/register', [AuthController::class, 'registerVendor']);
+Route::post('/forgot-password', [PasswordController::class, 'forgot']);
+Route::post('/reset-password', [PasswordController::class, 'reset']);
 
 // Public product listing
 Route::get('/products', [ProductController::class, 'index']);
@@ -28,7 +33,18 @@ Route::get('/products', [ProductController::class, 'index']);
 */
 Route::middleware('auth:sanctum')->group(function () {
 
+    // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/change-password', [PasswordController::class, 'change']);
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | User Profile (Customer + Vendor + Admin)
+    |--------------------------------------------------------------------------
+    */
+    Route::get('/profile', [ProfileController::class, 'show']);
+    Route::post('/profile', [ProfileController::class, 'update']);
 
     /*
     |--------------------------------------------------------------------------
@@ -77,4 +93,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // Orders
     Route::post('/checkout', [OrderController::class, 'placeOrder']);
     Route::get('/orders', [OrderController::class, 'myOrders']);
+
+
+
+    // Addresses
+    Route::get('/addresses', [AddressController::class, 'index']);
+    Route::post('/addresses', [AddressController::class, 'store']);
+    Route::put('/addresses/{id}', [AddressController::class, 'update']);
+    Route::delete('/addresses/{id}', [AddressController::class, 'destroy']);
+    Route::post('/addresses/{id}/default', [AddressController::class, 'setDefault']);
 });

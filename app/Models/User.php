@@ -6,6 +6,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use App\Models\UserAddress;
+
+
 
 class User extends Authenticatable
 {
@@ -21,6 +24,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'phone',
+        'avatar',
     ];
 
     /**
@@ -45,4 +50,14 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    /**
+     * 🔗 User has many addresses
+     */
+
+    public function addresses()
+{
+    return $this->hasMany(UserAddress::class);
+}
+
 }

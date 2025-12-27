@@ -27,7 +27,14 @@ class ProductController extends Controller
             'price' => 'required|numeric|min:0',
             'stock' => 'required|integer|min:0',
             'category_id' => 'required|exists:categories,id',
-            'image' => 'nullable|image|max:2048'
+            'image' => 'nullable|image|max:2048',
+
+            // Offer fields
+            'has_offer' => 'sometimes|boolean',
+            'discount_type' => 'nullable|in:percentage,fixed',
+            'discount_value' => 'nullable|numeric|min:0',
+            'offer_start' => 'nullable|date',
+            'offer_end' => 'nullable|date|after:offer_start',
         ]);
 
         $vendor = Vendor::where('user_id', $request->user()->id)->first();
@@ -47,7 +54,14 @@ class ProductController extends Controller
             'description' => $request->description,
             'price' => $request->price,
             'stock' => $request->stock,
-            'image' => $imagePath
+            'image' => $imagePath,
+
+            // Offer fields
+            'has_offer' => $request->has_offer ?? false,
+            'discount_type' => $request->discount_type,
+            'discount_value' => $request->discount_value,
+            'offer_start' => $request->offer_start,
+            'offer_end' => $request->offer_end,
         ]);
 
         return response()->json([
@@ -72,7 +86,14 @@ class ProductController extends Controller
             'price' => 'sometimes|numeric|min:0',
             'stock' => 'sometimes|integer|min:0',
             'category_id' => 'sometimes|exists:categories,id',
-            'image' => 'nullable|image|max:2048'
+            'image' => 'nullable|image|max:2048',
+
+            // Offer fields
+            'has_offer' => 'sometimes|boolean',
+            'discount_type' => 'nullable|in:percentage,fixed',
+            'discount_value' => 'nullable|numeric|min:0',
+            'offer_start' => 'nullable|date',
+            'offer_end' => 'nullable|date|after:offer_start',
         ]);
 
         if ($request->hasFile('image')) {
@@ -83,7 +104,16 @@ class ProductController extends Controller
         }
 
         $product->fill($request->only([
-            'name', 'description', 'price', 'stock', 'category_id'
+            'name',
+            'description',
+            'price',
+            'stock',
+            'category_id',
+            'has_offer',
+            'discount_type',
+            'discount_value',
+            'offer_start',
+            'offer_end',
         ]));
 
         $product->save();

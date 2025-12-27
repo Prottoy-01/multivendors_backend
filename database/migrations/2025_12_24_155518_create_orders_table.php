@@ -20,6 +20,7 @@ return new class extends Migration
                   ->onDelete('cascade');
 
             $table->decimal('total_amount', 10, 2);
+            $table->decimal('discount_total', 10, 2)->default(0);
 
             $table->enum('status', [
                 'pending',
