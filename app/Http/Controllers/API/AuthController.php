@@ -9,6 +9,9 @@ use App\Models\Vendor;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
+/* 🔵 [NEW] Google Client import */
+use Google\Client as GoogleClient;
+
 class AuthController extends Controller
 {
     // -------------------------
@@ -40,7 +43,7 @@ class AuthController extends Controller
     }
 
     // -------------------------
-    // LOGIN
+    // LOGIN (Email + Password)
     // -------------------------
     public function login(Request $request)
     {
@@ -51,10 +54,22 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
-            throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
-            ]);
+        // 🔒 Prevent Google users from logging in with password
+if (!$user || !$user->password || !Hash::check($request->password, $user->password)) {
+    throw ValidationException::withMessages([
+        'email' => ['The provided credentials are incorrect.'],
+    ]);
+}
+
+        // 🔒 Vendor approval check
+        if ($user->role === 'vendor') {
+            $vendor = Vendor::where('user_id', $user->id)->first();
+
+            if (!$vendor || $vendor->status !== 'approved') {
+                return response()->json([
+                    'message' => 'Vendor account is pending approval'
+                ], 403);
+            }
         }
 
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -64,6 +79,75 @@ class AuthController extends Controller
             'token_type' => 'Bearer',
             'user' => $user
         ], 200);
+    }
+
+    // -------------------------
+    // 🔵 GOOGLE LOGIN / REGISTER (NEW)
+    // -------------------------
+    public function googleLogin(Request $request)
+    {
+        $request->validate([
+            'id_token' => 'required',
+            'role' => 'required|in:customer,vendor'
+        ]);
+
+        $client = new GoogleClient([
+            'client_id' => env('GOOGLE_CLIENT_ID')
+        ]);
+
+        try {
+            $payload = $client->verifyIdToken($request->id_token);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Invalid Google token'], 401);
+        }
+
+        if (!$payload) {
+            return response()->json(['message' => 'Invalid Google token'], 401);
+        }
+
+        // 🔵 Find user by email
+        $user = User::where('email', $payload['email'])->first();
+
+        // 🔵 If user does not exist → create
+        if (!$user) {
+            $user = User::create([
+                'name' => $payload['name'],
+                'email' => $payload['email'],
+                'google_id' => $payload['sub'],           // 🔵 NEW
+                'auth_provider' => 'google',              // 🔵 NEW
+                'password' => null,                       // 🔵 No password for Google users
+                'role' => $request->role
+            ]);
+
+            // 🔵 If vendor → create vendor profile (pending)
+            if ($request->role === 'vendor') {
+                Vendor::create([
+                    'user_id' => $user->id,
+                    'shop_name' => 'Pending Shop Name',
+                    'status' => 'pending',
+                    'commission_percentage' => 10
+                ]);
+            }
+        }
+
+        // 🔒 Vendor approval check (same rule as email login)
+        if ($user->role === 'vendor') {
+            $vendor = Vendor::where('user_id', $user->id)->first();
+
+            if (!$vendor || $vendor->status !== 'approved') {
+                return response()->json([
+                    'message' => 'Vendor account is pending approval'
+                ], 403);
+            }
+        }
+
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'access_token' => $token,
+            'token_type' => 'Bearer',
+            'user' => $user
+        ]);
     }
 
     // -------------------------
@@ -90,7 +174,6 @@ class AuthController extends Controller
             'shop_name' => 'required|string|max:150'
         ]);
 
-        // Create user with role vendor
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
@@ -98,7 +181,6 @@ class AuthController extends Controller
             'role' => 'vendor',
         ]);
 
-        // Create vendor entry with 'pending' status
         $vendor = Vendor::create([
             'user_id' => $user->id,
             'shop_name' => $request->shop_name,
@@ -133,51 +215,51 @@ class AuthController extends Controller
     }
 
     // -------------------------
-// VENDOR: View Profile
-// -------------------------
-public function vendorProfile(Request $request)
-{
-    $vendor = Vendor::where('user_id', $request->user()->id)->first();
+    // VENDOR: View Profile
+    // -------------------------
+    public function vendorProfile(Request $request)
+    {
+        $vendor = Vendor::where('user_id', $request->user()->id)->first();
 
-    if (!$vendor) {
-        return response()->json(['message' => 'Vendor profile not found'], 404);
+        if (!$vendor) {
+            return response()->json(['message' => 'Vendor profile not found'], 404);
+        }
+
+        return response()->json([
+            'user' => $request->user(),
+            'vendor' => $vendor
+        ]);
     }
 
-    return response()->json([
-        'user' => $request->user(),
-        'vendor' => $vendor
-    ]);
-}
+    // -------------------------
+    // VENDOR: Update Profile
+    // -------------------------
+    public function updateVendorProfile(Request $request)
+    {
+        $vendor = Vendor::where('user_id', $request->user()->id)->first();
 
-// -------------------------
-// VENDOR: Update Profile
-// -------------------------
-public function updateVendorProfile(Request $request)
-{
-    $vendor = Vendor::where('user_id', $request->user()->id)->first();
+        if (!$vendor) {
+            return response()->json(['message' => 'Vendor profile not found'], 404);
+        }
 
-    if (!$vendor) {
-        return response()->json(['message' => 'Vendor profile not found'], 404);
+        $request->validate([
+            'shop_name' => 'sometimes|string|max:150',
+            'commission_percentage' => 'sometimes|numeric|min:0|max:100'
+        ]);
+
+        if ($request->has('shop_name')) {
+            $vendor->shop_name = $request->shop_name;
+        }
+
+        if ($request->has('commission_percentage')) {
+            $vendor->commission_percentage = $request->commission_percentage;
+        }
+
+        $vendor->save();
+
+        return response()->json([
+            'message' => 'Vendor profile updated successfully',
+            'vendor' => $vendor
+        ]);
     }
-
-    $request->validate([
-        'shop_name' => 'sometimes|string|max:150',
-        'commission_percentage' => 'sometimes|numeric|min:0|max:100'
-    ]);
-
-    if ($request->has('shop_name')) {
-        $vendor->shop_name = $request->shop_name;
-    }
-
-    if ($request->has('commission_percentage')) {
-        $vendor->commission_percentage = $request->commission_percentage;
-    }
-
-    $vendor->save();
-
-    return response()->json([
-        'message' => 'Vendor profile updated successfully',
-        'vendor' => $vendor
-    ]);
-}
 }

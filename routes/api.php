@@ -19,6 +19,10 @@ use App\Http\Controllers\API\AddressController;
 */
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+
+/* 🔵 GOOGLE LOGIN (NEW) */
+Route::post('/auth/google', [AuthController::class, 'googleLogin']);
+
 Route::post('/vendor/register', [AuthController::class, 'registerVendor']);
 Route::post('/forgot-password', [PasswordController::class, 'forgot']);
 Route::post('/reset-password', [PasswordController::class, 'reset']);
@@ -38,17 +42,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/change-password', [PasswordController::class, 'change']);
 
     /*
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     | User Profile (Customer + Vendor + Admin)
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     */
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::post('/profile', [ProfileController::class, 'update']);
 
     /*
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     | Admin Routes
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     */
     Route::middleware(AdminMiddleware::class)->group(function () {
         Route::post('/vendor/{vendor_id}/approve', [AuthController::class, 'approveVendor']);
@@ -61,28 +65,28 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     /*
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     | Vendor Routes (multi-image product support)
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     */
     Route::middleware(VendorMiddleware::class)->group(function () {
         // Vendor Profile
         Route::get('/vendor/profile', [AuthController::class, 'vendorProfile']);
         Route::put('/vendor/profile', [AuthController::class, 'updateVendorProfile']);
 
-        // Product CRUD (multi-images supported)
-        Route::post('/products', [ProductController::class, 'store']);       // Create product
-        Route::put('/products/{id}', [ProductController::class, 'update']); // Update product (add/remove images)
-        Route::delete('/products/{id}', [ProductController::class, 'destroy']); // Delete product and all images
+        // Product CRUD
+        Route::post('/products', [ProductController::class, 'store']);
+        Route::put('/products/{id}', [ProductController::class, 'update']);
+        Route::delete('/products/{id}', [ProductController::class, 'destroy']);
 
         // Vendor order status update
         Route::put('/orders/{id}/status', [OrderController::class, 'updateStatus']);
     });
 
     /*
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     | Customer Routes
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     */
     // Cart
     Route::get('/cart', [CartController::class, 'index']);
