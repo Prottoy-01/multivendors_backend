@@ -27,7 +27,16 @@ Route::post('/vendor/register', [AuthController::class, 'registerVendor']);
 Route::post('/forgot-password', [PasswordController::class, 'forgot']);
 Route::post('/reset-password', [PasswordController::class, 'reset']);
 
-// Public product listing (multi-image supported)
+/* Public product listing (multi-image supported)
+|---------------------------------------------------------------------------
+| Query Parameters:
+| - search: string (search in name & description)
+| - category_id: integer (filter by category)
+| - min_price: numeric (filter by minimum price)
+| - max_price: numeric (filter by maximum price)
+| - sort_by: string (options: newest, price_asc, price_desc)
+| - page: integer (for pagination)
+*/
 Route::get('/products', [ProductController::class, 'index']);
 
 /*

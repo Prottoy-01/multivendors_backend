@@ -11,19 +11,61 @@ use App\Models\Vendor;
 
 class ProductController extends Controller
 {
-    // Public: list products
-    public function index()
+    // Public: list products with search, filter, and sorting
+    public function index(Request $request)
     {
-        $products = Product::with(['vendor', 'category', 'images'])->paginate(10);
+        $query = Product::with(['vendor', 'category', 'images']);
 
-        $products->getCollection()->transform(function ($product) {
-            $product->images_url = $product->images->map(function ($img) {
-                return asset('storage/' . $img->image_path);
+        // Search by name or description
+        if ($request->has('search') && $request->search != '') {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%");
             });
+        }
+
+        // Filter by category
+        if ($request->has('category_id') && $request->category_id != '') {
+            $query->where('category_id', $request->category_id);
+        }
+
+        // Filter by price range
+        if ($request->has('min_price') && $request->has('max_price')) {
+            $query->whereBetween('price', [$request->min_price, $request->max_price]);
+        }
+
+        // Sorting: newest, price asc, price desc
+        if ($request->has('sort_by')) {
+            switch ($request->sort_by) {
+                case 'price_asc':
+                    $query->orderBy('price', 'asc');
+                    break;
+                case 'price_desc':
+                    $query->orderBy('price', 'desc');
+                    break;
+                case 'newest':
+                default:
+                    $query->orderBy('created_at', 'desc');
+            }
+        } else {
+            $query->orderBy('created_at', 'desc');
+        }
+
+        // Pagination
+        $products = $query->paginate(10);
+
+        // Add image URLs
+        $products->getCollection()->transform(function ($product) {
+            $product->images_url = $product->images->map(fn($img) => asset('storage/' . $img->image_path));
             return $product;
         });
 
-        return response()->json($products);
+        return response()->json([
+            'success' => true,
+            'message' => 'Products fetched successfully',
+            'data' => $products
+        ]);
     }
 
     // Vendor: create product
