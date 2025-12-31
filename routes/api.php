@@ -7,10 +7,15 @@ use App\Http\Controllers\API\ProductController;
 use App\Http\Controllers\API\CartController;
 use App\Http\Controllers\API\OrderController;
 use App\Http\Controllers\API\ProfileController;
-use App\Http\Middleware\AdminMiddleware;
-use App\Http\Middleware\VendorMiddleware;
 use App\Http\Controllers\API\PasswordController;
 use App\Http\Controllers\API\AddressController;
+use App\Http\Controllers\API\ReviewController;
+use App\Http\Controllers\API\WishlistController;
+use App\Http\Controllers\API\CouponController;
+use App\Http\Controllers\API\VendorDashboardController;
+use App\Http\Controllers\API\AdminDashboardController;
+use App\Http\Middleware\AdminMiddleware;
+use App\Http\Middleware\VendorMiddleware;
 
 /*
 |--------------------------------------------------------------------------
@@ -20,7 +25,7 @@ use App\Http\Controllers\API\AddressController;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
-/* 🔵 GOOGLE LOGIN (NEW) */
+/* 🔵 GOOGLE LOGIN */
 Route::post('/auth/google', [AuthController::class, 'googleLogin']);
 
 Route::post('/vendor/register', [AuthController::class, 'registerVendor']);
@@ -38,6 +43,9 @@ Route::post('/reset-password', [PasswordController::class, 'reset']);
 | - page: integer (for pagination)
 */
 Route::get('/products', [ProductController::class, 'index']);
+
+/* Public product reviews */
+Route::get('/products/{id}/reviews', [ReviewController::class, 'index']);
 
 /*
 |--------------------------------------------------------------------------
@@ -60,10 +68,65 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     |----------------------------------------------------------------------
+    | Reviews (Authenticated Users)
+    |----------------------------------------------------------------------
+    */
+    Route::post('/reviews', [ReviewController::class, 'store']);
+    Route::delete('/reviews/{id}', [ReviewController::class, 'destroy']);
+
+    /*
+    |----------------------------------------------------------------------
+    | Wishlist (Customer)
+    |----------------------------------------------------------------------
+    */
+    Route::get('/wishlist', [WishlistController::class, 'index']);
+    Route::post('/wishlist', [WishlistController::class, 'store']);
+    Route::delete('/wishlist/{productId}', [WishlistController::class, 'destroy']);
+    Route::post('/wishlist/toggle', [WishlistController::class, 'toggle']);
+
+    /*
+    |----------------------------------------------------------------------
+    | Coupons (Customer)
+    |----------------------------------------------------------------------
+    */
+    Route::post('/coupons/validate', [CouponController::class, 'validate']);
+
+    /*
+    |----------------------------------------------------------------------
+    | Cart (Customer)
+    |----------------------------------------------------------------------
+    */
+    Route::get('/cart', [CartController::class, 'index']);
+    Route::post('/cart/add', [CartController::class, 'add']);
+    Route::put('/cart/item/{id}', [CartController::class, 'update']);
+    Route::delete('/cart/item/{id}', [CartController::class, 'remove']);
+
+    /*
+    |----------------------------------------------------------------------
+    | Orders (Customer)
+    |----------------------------------------------------------------------
+    */
+    Route::post('/checkout', [OrderController::class, 'placeOrder']);
+    Route::get('/orders', [OrderController::class, 'myOrders']);
+
+    /*
+    |----------------------------------------------------------------------
+    | Addresses (Customer)
+    |----------------------------------------------------------------------
+    */
+    Route::get('/addresses', [AddressController::class, 'index']);
+    Route::post('/addresses', [AddressController::class, 'store']);
+    Route::put('/addresses/{id}', [AddressController::class, 'update']);
+    Route::delete('/addresses/{id}', [AddressController::class, 'destroy']);
+    Route::post('/addresses/{id}/default', [AddressController::class, 'setDefault']);
+
+    /*
+    |----------------------------------------------------------------------
     | Admin Routes
     |----------------------------------------------------------------------
     */
     Route::middleware(AdminMiddleware::class)->group(function () {
+        // Vendor Management
         Route::post('/vendor/{vendor_id}/approve', [AuthController::class, 'approveVendor']);
 
         // Category CRUD
@@ -71,6 +134,18 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/categories', [CategoryController::class, 'store']);
         Route::put('/categories/{id}', [CategoryController::class, 'update']);
         Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
+
+        // Admin Dashboard
+        Route::get('/admin/dashboard/overview', [AdminDashboardController::class, 'overview']);
+        Route::get('/admin/vendors', [AdminDashboardController::class, 'vendors']);
+        Route::get('/admin/users', [AdminDashboardController::class, 'users']);
+        Route::get('/admin/orders', [AdminDashboardController::class, 'orders']);
+
+        // Coupon Management
+        Route::apiResource('admin/coupons', CouponController::class);
+
+        // Review Moderation
+        Route::put('/admin/reviews/{id}/moderate', [ReviewController::class, 'moderate']);
     });
 
     /*
@@ -90,27 +165,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Vendor order status update
         Route::put('/orders/{id}/status', [OrderController::class, 'updateStatus']);
+
+        // Vendor Dashboard
+        Route::get('/vendor/dashboard/analytics', [VendorDashboardController::class, 'analytics']);
+        Route::get('/vendor/dashboard/orders', [VendorDashboardController::class, 'recentOrders']);
+        Route::get('/vendor/dashboard/products', [VendorDashboardController::class, 'products']);
     });
-
-    /*
-    |----------------------------------------------------------------------
-    | Customer Routes
-    |----------------------------------------------------------------------
-    */
-    // Cart
-    Route::get('/cart', [CartController::class, 'index']);
-    Route::post('/cart/add', [CartController::class, 'add']);
-    Route::put('/cart/item/{id}', [CartController::class, 'update']);
-    Route::delete('/cart/item/{id}', [CartController::class, 'remove']);
-
-    // Orders
-    Route::post('/checkout', [OrderController::class, 'placeOrder']);
-    Route::get('/orders', [OrderController::class, 'myOrders']);
-
-    // Addresses
-    Route::get('/addresses', [AddressController::class, 'index']);
-    Route::post('/addresses', [AddressController::class, 'store']);
-    Route::put('/addresses/{id}', [AddressController::class, 'update']);
-    Route::delete('/addresses/{id}', [AddressController::class, 'destroy']);
-    Route::post('/addresses/{id}/default', [AddressController::class, 'setDefault']);
 });
