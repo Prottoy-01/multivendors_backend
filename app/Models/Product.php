@@ -30,7 +30,7 @@ class Product extends Model
     /**
      * Automatically include final_price and images in API responses
      */
-    protected $appends = ['final_price', 'images'];
+    protected $appends = ['final_price', 'image_urls'];
 
     /**
      * Relationships
@@ -45,6 +45,16 @@ class Product extends Model
         return $this->belongsTo(Category::class);
     }
 
+    public function reviews()//new
+{
+    return $this->hasMany(Review::class);
+}
+
+public function wishlists()//new
+{
+    return $this->hasMany(Wishlist::class);
+}
+
     /**
      * Product images relationship
      */
@@ -56,8 +66,9 @@ class Product extends Model
     /**
      * Return images as URLs for API response
      */
-    public function getImagesAttribute()
+    public function getImageUrlsAttribute()
     {
+        //return $this->images->map(fn($img) => asset('storage/' . $img->image_path));
         return $this->images->map(fn($img) => asset('storage/' . $img->image_path));
     }
 

@@ -57,7 +57,8 @@ class ProductController extends Controller
 
         // Add image URLs
         $products->getCollection()->transform(function ($product) {
-            $product->images_url = $product->images->map(fn($img) => asset('storage/' . $img->image_path));
+           // $product->images_url = $product->images->map(fn($img) => asset('storage/' . $img->image_path));
+           $product->image_urls = $product->images->map(fn($img) => asset('storage/' . $img->image_path));
             return $product;
         });
 

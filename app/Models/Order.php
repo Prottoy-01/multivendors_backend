@@ -44,6 +44,11 @@ class Order extends Model
         return $this->belongsTo(Vendor::class);
     }
 
+    public function coupon()//new
+{
+    return $this->belongsTo(Coupon::class);
+}
+
     /* ================= Order Status ================= */
 
     const STATUS_PENDING   = 'pending';
