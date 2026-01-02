@@ -44,6 +44,10 @@ Route::post('/reset-password', [PasswordController::class, 'reset']);
 */
 Route::get('/products', [ProductController::class, 'index']);
 
+/* Public categories - ADD THIS LINE */
+Route::get('/categories', [CategoryController::class, 'index']);
+
+
 /* Public product reviews */
 Route::get('/products/{id}/reviews', [ReviewController::class, 'index']);
 
@@ -130,7 +134,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/vendor/{vendor_id}/approve', [AuthController::class, 'approveVendor']);
 
         // Category CRUD
-        Route::get('/categories', [CategoryController::class, 'index']);
+        //Route::get('/categories', [CategoryController::class, 'index']);
         Route::post('/categories', [CategoryController::class, 'store']);
         Route::put('/categories/{id}', [CategoryController::class, 'update']);
         Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
