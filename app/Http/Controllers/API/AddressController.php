@@ -25,12 +25,13 @@ class AddressController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name'          => 'required|string',
+            'recipient_name'          => 'required|string',
             'phone'         => 'required|string',
             'address_line'  => 'required|string',
             'city'          => 'required|string',
-            'area'          => 'nullable|string',
+            'state'          => 'nullable|string',
             'postal_code'   => 'nullable|string',
+            'country'        => 'nullable|string|max:100',
             'is_default'    => 'boolean'
         ]);
 
@@ -43,12 +44,13 @@ class AddressController extends Controller
 
         $address = UserAddress::create([
             'user_id'       => $request->user()->id,
-            'name'          => $request->name,
+            'recipient_name'          => $request->recipient_name,
             'phone'         => $request->phone,
             'address_line'  => $request->address_line,
             'city'          => $request->city,
-            'area'          => $request->area,
+            'state'          => $request->state,
             'postal_code'   => $request->postal_code,
+            'country'        => $request->country ?? 'Bangladesh',
             'is_default'    => $request->is_default ?? false,
         ]);
 
@@ -65,12 +67,13 @@ class AddressController extends Controller
             ->firstOrFail();
 
         $request->validate([
-            'name'          => 'required|string',
+            'recipient_name'          => 'required|string',
             'phone'         => 'required|string',
             'address_line'  => 'required|string',
             'city'          => 'required|string',
-            'area'          => 'nullable|string',
+            'state'          => 'nullable|string',
             'postal_code'   => 'nullable|string',
+            'country'        => 'nullable|string|max:100',
             'is_default'    => 'boolean'
         ]);
 

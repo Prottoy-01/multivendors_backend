@@ -8,7 +8,7 @@ class UserAddress extends Model
 {
       protected $fillable = [
         'user_id',
-        'name',
+        'recipient_name',
         'phone',
         'address_line',
         'city',
