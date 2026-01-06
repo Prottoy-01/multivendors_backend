@@ -81,7 +81,7 @@ Route::middleware('auth:sanctum')->group(function () {
     /*
     |----------------------------------------------------------------------
     | Wishlist (Customer)
-    |----------------------------------------------------------------------
+    
     */
     Route::get('/wishlist', [WishlistController::class, 'index']);
     Route::post('/wishlist', [WishlistController::class, 'store']);

@@ -1,7 +1,95 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Web\HomeController;
+use App\Http\Controllers\Web\AuthController;
+use App\Http\Controllers\Web\CustomerController;
+use App\Http\Controllers\Web\VendorController;
+use App\Http\Controllers\Web\AdminController;
 
-Route::get('/', function () {
-    return view('welcome');
+/*
+|--------------------------------------------------------------------------
+| Public Routes
+|--------------------------------------------------------------------------
+*/
+
+// Home & Products
+Route::get('/', [HomeController::class, 'index'])->name('home');
+Route::get('/products', [HomeController::class, 'products'])->name('products.index');
+Route::get('/products/{id}', [HomeController::class, 'productDetail'])->name('products.show');
+Route::get('/category/{id}', [HomeController::class, 'category'])->name('category.show');
+
+// Authentication
+Route::middleware('guest')->group(function () {
+    Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
+    Route::post('/login', [AuthController::class, 'login']);
+    Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
+    Route::post('/register', [AuthController::class, 'register']);
+    Route::get('/vendor/register', [AuthController::class, 'showVendorRegister'])->name('vendor.register');
+    Route::post('/vendor/register', [AuthController::class, 'vendorRegister']);
+});
+
+Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+/*
+|--------------------------------------------------------------------------
+| Customer Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth'])->prefix('customer')->name('customer.')->group(function () {
+    Route::get('/dashboard', [CustomerController::class, 'dashboard'])->name('dashboard');
+    Route::get('/orders', [CustomerController::class, 'orders'])->name('orders');
+    Route::get('/orders/{id}', [CustomerController::class, 'orderDetail'])->name('orders.show');
+    Route::get('/wishlist', [CustomerController::class, 'wishlist'])->name('wishlist');
+    Route::post('/wishlist/toggle', [CustomerController::class, 'toggleWishlist'])->name('wishlist.toggle');
+    Route::get('/cart', [CustomerController::class, 'cart'])->name('cart');
+    Route::post('/cart/add', [CustomerController::class, 'addToCart'])->name('cart.add');
+    Route::post('/cart/update/{id}', [CustomerController::class, 'updateCart'])->name('cart.update');
+    Route::delete('/cart/remove/{id}', [CustomerController::class, 'removeFromCart'])->name('cart.remove');
+    Route::get('/checkout', [CustomerController::class, 'checkout'])->name('checkout');
+    Route::post('/checkout', [CustomerController::class, 'placeOrder'])->name('checkout.place');
+    Route::get('/profile', [CustomerController::class, 'profile'])->name('profile');
+    Route::post('/profile', [CustomerController::class, 'updateProfile'])->name('profile.update');
+    Route::get('/addresses', [CustomerController::class, 'addresses'])->name('addresses');
+    Route::post('/addresses', [CustomerController::class, 'storeAddress'])->name('addresses.store');
+    Route::post('/reviews', [CustomerController::class, 'storeReview'])->name('reviews.store');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Vendor Routes (Using your existing VendorMiddleware)
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', \App\Http\Middleware\VendorMiddleware::class])->prefix('vendor')->name('vendor.')->group(function () {
+    Route::get('/dashboard', [VendorController::class, 'dashboard'])->name('dashboard');
+    Route::get('/products', [VendorController::class, 'products'])->name('products.index');
+    Route::get('/products/create', [VendorController::class, 'createProduct'])->name('products.create');
+    Route::post('/products', [VendorController::class, 'storeProduct'])->name('products.store');
+    Route::get('/products/{id}/edit', [VendorController::class, 'editProduct'])->name('products.edit');
+    Route::post('/products/{id}', [VendorController::class, 'updateProduct'])->name('products.update');
+    Route::delete('/products/{id}', [VendorController::class, 'deleteProduct'])->name('products.destroy');
+    Route::get('/orders', [VendorController::class, 'orders'])->name('orders');
+    Route::post('/orders/{id}/status', [VendorController::class, 'updateOrderStatus'])->name('orders.status');
+    Route::get('/analytics', [VendorController::class, 'analytics'])->name('analytics');
+    Route::get('/profile', [VendorController::class, 'profile'])->name('profile');
+    Route::post('/profile', [VendorController::class, 'updateProfile'])->name('profile.update');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Admin Routes (Using your existing AdminMiddleware)
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', \App\Http\Middleware\AdminMiddleware::class])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
+    Route::get('/users', [AdminController::class, 'users'])->name('users');
+    Route::get('/vendors', [AdminController::class, 'vendors'])->name('vendors');
+    Route::post('/vendors/{id}/approve', [AdminController::class, 'approveVendor'])->name('vendors.approve');
+    Route::get('/categories', [AdminController::class, 'categories'])->name('categories');
+    Route::post('/categories', [AdminController::class, 'storeCategory'])->name('categories.store');
+    Route::put('/categories/{id}', [AdminController::class, 'updateCategory'])->name('categories.update');
+    Route::delete('/categories/{id}', [AdminController::class, 'deleteCategory'])->name('categories.destroy');
+    Route::get('/orders', [AdminController::class, 'orders'])->name('orders');
+    Route::get('/coupons', [AdminController::class, 'coupons'])->name('coupons');
+    Route::post('/coupons', [AdminController::class, 'storeCoupon'])->name('coupons.store');
 });
