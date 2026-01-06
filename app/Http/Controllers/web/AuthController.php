@@ -3,19 +3,15 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use App\Services\ApiService;
+use App\Models\User;
+use App\Models\Vendor;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
 
 class AuthController extends Controller
 {
-    protected $api;
-
-    public function __construct(ApiService $api)
-    {
-        $this->api = $api;
-    }
-
     /**
      * Show login form
      */
@@ -34,29 +30,35 @@ class AuthController extends Controller
             'password' => 'required',
         ]);
 
-        $response = $this->api->login([
-            'email' => $request->email,
-            'password' => $request->password,
-        ]);
-
-        if (isset($response['token'])) {
-            // Store token and user data in session
-            Session::put('api_token', $response['token']);
-            Session::put('user', $response['user']);
+        // Attempt to authenticate
+        $credentials = $request->only('email', 'password');
+        
+        if (Auth::attempt($credentials, $request->filled('remember'))) {
+            $request->session()->regenerate();
+            
+            $user = Auth::user();
+            
+            // Store user data in session for easy access
+            Session::put('user', [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+            ]);
 
             // Redirect based on role
-            $role = $response['user']['role'];
-            
-            if ($role === 'admin') {
+            if ($user->role === 'admin') {
                 return redirect()->route('admin.dashboard')->with('success', 'Welcome back!');
-            } elseif ($role === 'vendor') {
+            } elseif ($user->role === 'vendor') {
                 return redirect()->route('vendor.dashboard')->with('success', 'Welcome back!');
             } else {
                 return redirect()->route('customer.dashboard')->with('success', 'Welcome back!');
             }
         }
 
-        return back()->withErrors(['email' => $response['message'] ?? 'Invalid credentials'])->withInput();
+        return back()->withErrors([
+            'email' => 'The provided credentials do not match our records.',
+        ])->withInput();
     }
 
     /**
@@ -74,25 +76,28 @@ class AuthController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|max:255',
+            'email' => 'required|email|max:255|unique:users',
             'password' => 'required|min:8|confirmed',
         ]);
 
-        $response = $this->api->register([
+        $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
-            'password' => $request->password,
-            'password_confirmation' => $request->password_confirmation,
+            'password' => Hash::make($request->password),
+            'role' => 'customer',
         ]);
 
-        if (isset($response['token'])) {
-            Session::put('api_token', $response['token']);
-            Session::put('user', $response['user']);
+        // Auto login after registration
+        Auth::login($user);
 
-            return redirect()->route('customer.dashboard')->with('success', 'Registration successful!');
-        }
+        Session::put('user', [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $user->role,
+        ]);
 
-        return back()->withErrors(['email' => $response['message'] ?? 'Registration failed'])->withInput();
+        return redirect()->route('customer.dashboard')->with('success', 'Registration successful! Welcome!');
     }
 
     /**
@@ -110,7 +115,7 @@ class AuthController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|max:255',
+            'email' => 'required|email|max:255|unique:users',
             'password' => 'required|min:8|confirmed',
             'shop_name' => 'required|string|max:255',
             'shop_description' => 'nullable|string',
@@ -118,31 +123,37 @@ class AuthController extends Controller
             'address' => 'required|string',
         ]);
 
-        $response = $this->api->registerVendor([
+        // Create user
+        $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
-            'password' => $request->password,
-            'password_confirmation' => $request->password_confirmation,
+            'password' => Hash::make($request->password),
+            'role' => 'vendor',
+        ]);
+
+        // Create vendor profile
+        Vendor::create([
+            'user_id' => $user->id,
             'shop_name' => $request->shop_name,
             'shop_description' => $request->shop_description,
             'phone' => $request->phone,
             'address' => $request->address,
+            //'is_approved' => false, // Needs admin approval
+            'status' => 'pending',
         ]);
 
-        if (isset($response['message']) && strpos($response['message'], 'success') !== false) {
-            return redirect()->route('login')->with('success', 'Vendor registration successful! Please wait for admin approval.');
-        }
-
-        return back()->withErrors(['email' => $response['message'] ?? 'Registration failed'])->withInput();
+        return redirect()->route('login')->with('success', 'Vendor registration successful! Please wait for admin approval before logging in.');
     }
 
     /**
      * Handle logout
      */
-    public function logout()
+    public function logout(Request $request)
     {
-        $this->api->logout();
-        Session::flush();
+        Auth::logout();
+        
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
         
         return redirect()->route('home')->with('success', 'Logged out successfully!');
     }

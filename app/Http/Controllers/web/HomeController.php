@@ -3,30 +3,26 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use App\Services\ApiService;
+use App\Models\Product;
+use App\Models\Category;
 use Illuminate\Http\Request;
 
 class HomeController extends Controller
 {
-    protected $api;
-
-    public function __construct(ApiService $api)
-    {
-        $this->api = $api;
-    }
-
     /**
      * Show homepage
      */
     public function index()
     {
-        // Get featured products
-        $response = $this->api->getProducts(['page' => 1, 'per_page' => 8]);
-        $products = $response['data'] ?? [];
+        // Get featured products directly from database
+        $products = Product::with(['vendor', 'category', 'images'])
+            ->orderBy('created_at', 'desc')
+            ->limit(8)
+            ->get()
+            ->toArray();
         
-        // Get categories
-        $categoriesResponse = $this->api->getCategories();
-        $categories = $categoriesResponse['data'] ?? [];
+        // Get categories directly from database
+        $categories = Category::orderBy('name')->get()->toArray();
 
         return view('home', compact('products', 'categories'));
     }
@@ -36,27 +32,60 @@ class HomeController extends Controller
      */
     public function products(Request $request)
     {
-        $params = [
-            'search' => $request->get('search'),
-            'category_id' => $request->get('category_id'),
-            'min_price' => $request->get('min_price'),
-            'max_price' => $request->get('max_price'),
-            'sort_by' => $request->get('sort_by', 'newest'),
-            'page' => $request->get('page', 1),
-        ];
+        $query = Product::with(['vendor', 'category', 'images']);
 
-        $response = $this->api->getProducts($params);
-        $products = $response['data'] ?? [];
+        // Search
+        if ($request->has('search') && $request->search != '') {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%");
+            });
+        }
+
+        // Filter by category
+        if ($request->has('category_id') && $request->category_id != '') {
+            $query->where('category_id', $request->category_id);
+        }
+
+        // Filter by price range
+        if ($request->has('min_price') && $request->min_price != '') {
+            $query->where('price', '>=', $request->min_price);
+        }
+        if ($request->has('max_price') && $request->max_price != '') {
+            $query->where('price', '<=', $request->max_price);
+        }
+
+        // Sort by
+        if ($request->has('sort_by')) {
+            switch ($request->sort_by) {
+                case 'price_asc':
+                    $query->orderBy('price', 'asc');
+                    break;
+                case 'price_desc':
+                    $query->orderBy('price', 'desc');
+                    break;
+                case 'newest':
+                default:
+                    $query->orderBy('created_at', 'desc');
+            }
+        } else {
+            $query->orderBy('created_at', 'desc');
+        }
+
+        // Pagination
+        $productsData = $query->paginate(15);
+        $products = $productsData->items();
+        
         $pagination = [
-            'current_page' => $response['current_page'] ?? 1,
-            'last_page' => $response['last_page'] ?? 1,
-            'per_page' => $response['per_page'] ?? 15,
-            'total' => $response['total'] ?? 0,
+            'current_page' => $productsData->currentPage(),
+            'last_page' => $productsData->lastPage(),
+            'per_page' => $productsData->perPage(),
+            'total' => $productsData->total(),
         ];
 
         // Get categories for filter
-        $categoriesResponse = $this->api->getCategories();
-        $categories = $categoriesResponse['data'] ?? [];
+        $categories = Category::orderBy('name')->get()->toArray();
 
         return view('products.index', compact('products', 'categories', 'pagination'));
     }
@@ -66,24 +95,21 @@ class HomeController extends Controller
      */
     public function productDetail($id)
     {
-        $productResponse = $this->api->getProduct($id);
+        $product = Product::with(['vendor', 'category', 'images', 'reviews.user'])
+            ->findOrFail($id);
         
-        if (!isset($productResponse['data'])) {
-            abort(404, 'Product not found');
-        }
-
-        $product = $productResponse['data'];
+        $product = $product->toArray();
         
-        // Get product reviews
-        $reviewsResponse = $this->api->getProductReviews($id);
-        $reviews = $reviewsResponse['data'] ?? [];
+        // Get reviews
+        $reviews = $product['reviews'] ?? [];
 
         // Get related products (same category)
-        $relatedResponse = $this->api->getProducts([
-            'category_id' => $product['category_id'],
-            'per_page' => 4
-        ]);
-        $relatedProducts = $relatedResponse['data'] ?? [];
+        $relatedProducts = Product::with(['vendor', 'category', 'images'])
+            ->where('category_id', $product['category_id'])
+            ->where('id', '!=', $id)
+            ->limit(4)
+            ->get()
+            ->toArray();
 
         return view('products.show', compact('product', 'reviews', 'relatedProducts'));
     }
@@ -93,25 +119,26 @@ class HomeController extends Controller
      */
     public function category($id)
     {
-        $params = [
-            'category_id' => $id,
-            'page' => request()->get('page', 1),
-        ];
+        $query = Product::with(['vendor', 'category', 'images'])
+            ->where('category_id', $id);
 
-        $response = $this->api->getProducts($params);
-        $products = $response['data'] ?? [];
+        $productsData = $query->paginate(15);
+        $products = $productsData->items();
+        
         $pagination = [
-            'current_page' => $response['current_page'] ?? 1,
-            'last_page' => $response['last_page'] ?? 1,
-            'per_page' => $response['per_page'] ?? 15,
-            'total' => $response['total'] ?? 0,
+            'current_page' => $productsData->currentPage(),
+            'last_page' => $productsData->lastPage(),
+            'per_page' => $productsData->perPage(),
+            'total' => $productsData->total(),
         ];
 
         // Get categories
-        $categoriesResponse = $this->api->getCategories();
-        $categories = $categoriesResponse['data'] ?? [];
+        $categories = Category::orderBy('name')->get()->toArray();
         
-        $currentCategory = collect($categories)->firstWhere('id', $id);
+        $currentCategory = Category::find($id);
+        if ($currentCategory) {
+            $currentCategory = $currentCategory->toArray();
+        }
 
         return view('products.index', compact('products', 'categories', 'pagination', 'currentCategory'));
     }

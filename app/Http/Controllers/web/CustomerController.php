@@ -3,31 +3,38 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use App\Services\ApiService;
+use App\Models\Order;
+use App\Models\Product;
+use App\Models\Wishlist;
+use App\Models\Cart;
+use App\Models\CartItem;
+use App\Models\UserAddress;
+use App\Models\Review;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class CustomerController extends Controller
 {
-    protected $api;
-
-    public function __construct(ApiService $api)
-    {
-        $this->api = $api;
-    }
-
     /**
      * Customer dashboard
      */
     public function dashboard()
     {
-        $ordersResponse = $this->api->getOrders();
-        $orders = $ordersResponse['data'] ?? [];
+        $user = Auth::user();
         
-        $wishlistResponse = $this->api->getWishlist();
-        $wishlistCount = count($wishlistResponse['data'] ?? []);
+        // Get orders directly from database
+        $orders = Order::where('user_id', $user->id)
+            ->with(['items.product'])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->toArray();
         
-        $cartResponse = $this->api->getCart();
-        $cartCount = count($cartResponse['items'] ?? []);
+        // Get wishlist count
+        $wishlistCount = Wishlist::where('user_id', $user->id)->count();
+        
+        // Get cart count
+        $cart = Cart::where('user_id', $user->id)->first();
+        $cartCount = $cart ? CartItem::where('cart_id', $cart->id)->count() : 0;
 
         return view('customer.dashboard', compact('orders', 'wishlistCount', 'cartCount'));
     }
@@ -37,8 +44,13 @@ class CustomerController extends Controller
      */
     public function orders()
     {
-        $response = $this->api->getOrders();
-        $orders = $response['data'] ?? [];
+        $user = Auth::user();
+        
+        $orders = Order::where('user_id', $user->id)
+            ->with(['items.product.images', 'items.product.vendor'])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->toArray();
 
         return view('customer.orders', compact('orders'));
     }
@@ -48,13 +60,13 @@ class CustomerController extends Controller
      */
     public function orderDetail($id)
     {
-        $response = $this->api->getOrders();
-        $orders = $response['data'] ?? [];
-        $order = collect($orders)->firstWhere('id', $id);
-
-        if (!$order) {
-            abort(404, 'Order not found');
-        }
+        $user = Auth::user();
+        
+        $order = Order::where('user_id', $user->id)
+            ->where('id', $id)
+            ->with(['items.product.images', 'items.product.vendor'])
+            ->firstOrFail()
+            ->toArray();
 
         return view('customer.order-detail', compact('order'));
     }
@@ -64,8 +76,15 @@ class CustomerController extends Controller
      */
     public function wishlist()
     {
-        $response = $this->api->getWishlist();
-        $wishlist = $response['data'] ?? [];
+        $user = Auth::user();
+        
+        $wishlist = Wishlist::where('user_id', $user->id)
+            ->with(['product.images', 'product.vendor', 'product.category'])
+            ->get()
+            ->map(function($item) {
+                return $item->product->toArray();
+            })
+            ->toArray();
 
         return view('customer.wishlist', compact('wishlist'));
     }
@@ -75,13 +94,24 @@ class CustomerController extends Controller
      */
     public function toggleWishlist(Request $request)
     {
-        $response = $this->api->toggleWishlist($request->product_id);
+        $user = Auth::user();
+        
+        $wishlist = Wishlist::where('user_id', $user->id)
+            ->where('product_id', $request->product_id)
+            ->first();
 
-        if (isset($response['message'])) {
-            return response()->json(['success' => true, 'message' => $response['message']]);
+        if ($wishlist) {
+            $wishlist->delete();
+            $message = 'Removed from wishlist';
+        } else {
+            Wishlist::create([
+                'user_id' => $user->id,
+                'product_id' => $request->product_id,
+            ]);
+            $message = 'Added to wishlist';
         }
 
-        return response()->json(['success' => false, 'message' => 'Failed to update wishlist'], 400);
+        return response()->json(['success' => true, 'message' => $message]);
     }
 
     /**
@@ -89,8 +119,30 @@ class CustomerController extends Controller
      */
     public function cart()
     {
-        $response = $this->api->getCart();
-        $cart = $response;
+        $user = Auth::user();
+        
+        // Get or create cart (no total_amount column)
+        $cart = Cart::firstOrCreate(
+            ['user_id' => $user->id]
+        );
+
+        // Get cart items with products
+        $cartItems = CartItem::where('cart_id', $cart->id)
+            ->with(['product.images', 'product.vendor'])
+            ->get();
+
+        // Calculate totals using final_price (price after discount)
+        $subtotal = $cartItems->sum(function($item) {
+            return $item->quantity * $item->final_price;
+        });
+
+        $cart = [
+            'id' => $cart->id,
+            'items' => $cartItems->toArray(),
+            'subtotal' => $subtotal,
+            'tax' => $subtotal * 0.1, // 10% tax
+            'total' => $subtotal + ($subtotal * 0.1),
+        ];
 
         return view('customer.cart', compact('cart'));
     }
@@ -100,16 +152,40 @@ class CustomerController extends Controller
      */
     public function addToCart(Request $request)
     {
-        $response = $this->api->addToCart([
-            'product_id' => $request->product_id,
-            'quantity' => $request->quantity ?? 1,
-        ]);
+        $user = Auth::user();
+        
+        // Get or create cart (no total_amount column)
+        $cart = Cart::firstOrCreate(
+            ['user_id' => $user->id]
+        );
 
-        if (isset($response['message'])) {
-            return redirect()->back()->with('success', 'Product added to cart!');
+        // Get product
+        $product = Product::findOrFail($request->product_id);
+        
+        // Calculate final price (after discount if any)
+        $finalPrice = $product->final_price ?? $product->price;
+        
+        // Check if item already in cart
+        $cartItem = CartItem::where('cart_id', $cart->id)
+            ->where('product_id', $product->id)
+            ->first();
+
+        if ($cartItem) {
+            // Update quantity
+            $cartItem->quantity += $request->quantity ?? 1;
+            $cartItem->save();
+        } else {
+            // Add new item - MUST include both price AND final_price
+            CartItem::create([
+                'cart_id' => $cart->id,
+                'product_id' => $product->id,
+                'quantity' => $request->quantity ?? 1,
+                'price' => $product->price,           // Original price
+                'final_price' => $finalPrice,         // Price after discount
+            ]);
         }
 
-        return redirect()->back()->with('error', 'Failed to add product to cart');
+        return redirect()->back()->with('success', 'Product added to cart!');
     }
 
     /**
@@ -117,11 +193,17 @@ class CustomerController extends Controller
      */
     public function updateCart(Request $request, $id)
     {
-        $response = $this->api->updateCartItem($id, [
-            'quantity' => $request->quantity,
-        ]);
+        $user = Auth::user();
+        $cart = Cart::where('user_id', $user->id)->firstOrFail();
+        
+        $cartItem = CartItem::where('cart_id', $cart->id)
+            ->where('id', $id)
+            ->firstOrFail();
 
-        return response()->json(['success' => isset($response['message'])]);
+        $cartItem->quantity = $request->quantity;
+        $cartItem->save();
+
+        return response()->json(['success' => true]);
     }
 
     /**
@@ -129,13 +211,16 @@ class CustomerController extends Controller
      */
     public function removeFromCart($id)
     {
-        $response = $this->api->removeFromCart($id);
+        $user = Auth::user();
+        $cart = Cart::where('user_id', $user->id)->firstOrFail();
+        
+        $cartItem = CartItem::where('cart_id', $cart->id)
+            ->where('id', $id)
+            ->firstOrFail();
 
-        if (isset($response['message'])) {
-            return redirect()->back()->with('success', 'Item removed from cart');
-        }
+        $cartItem->delete();
 
-        return redirect()->back()->with('error', 'Failed to remove item');
+        return redirect()->back()->with('success', 'Item removed from cart');
     }
 
     /**
@@ -143,15 +228,32 @@ class CustomerController extends Controller
      */
     public function checkout()
     {
-        $cartResponse = $this->api->getCart();
-        $cart = $cartResponse;
-
-        if (empty($cart['items'])) {
+        $user = Auth::user();
+        
+        $cart = Cart::where('user_id', $user->id)->first();
+        
+        if (!$cart || CartItem::where('cart_id', $cart->id)->count() == 0) {
             return redirect()->route('customer.cart')->with('error', 'Your cart is empty');
         }
 
-        $addressesResponse = $this->api->getAddresses();
-        $addresses = $addressesResponse['data'] ?? [];
+        $cartItems = CartItem::where('cart_id', $cart->id)
+            ->with(['product.images', 'product.vendor'])
+            ->get();
+
+        // Calculate totals using final_price
+        $subtotal = $cartItems->sum(function($item) {
+            return $item->quantity * $item->final_price;
+        });
+
+        $cart = [
+            'id' => $cart->id,
+            'items' => $cartItems->toArray(),
+            'subtotal' => $subtotal,
+            'tax' => $subtotal * 0.1,
+            'total' => $subtotal + ($subtotal * 0.1),
+        ];
+
+        $addresses = UserAddress::where('user_id', $user->id)->get()->toArray();
 
         return view('customer.checkout', compact('cart', 'addresses'));
     }
@@ -162,22 +264,64 @@ class CustomerController extends Controller
     public function placeOrder(Request $request)
     {
         $request->validate([
-            'address_id' => 'required',
-            'payment_method' => 'required',
+            'address_id' => 'required|exists:user_addresses,id',
+            'payment_method' => 'required|in:cash_on_delivery,card,bank_transfer',
         ]);
 
-        $response = $this->api->placeOrder([
-            'address_id' => $request->address_id,
+        $user = Auth::user();
+        $cart = Cart::where('user_id', $user->id)->firstOrFail();
+        $cartItems = CartItem::where('cart_id', $cart->id)->with('product')->get();
+
+        if ($cartItems->isEmpty()) {
+            return back()->with('error', 'Your cart is empty');
+        }
+
+        // Get address
+        $address = UserAddress::findOrFail($request->address_id);
+
+        // Calculate totals using final_price
+        $subtotal = $cartItems->sum(function($item) {
+            return $item->quantity * $item->final_price;
+        });
+        $tax = $subtotal * 0.1;
+        $total = $subtotal + $tax;
+
+        // Create order
+        $order = Order::create([
+            'user_id' => $user->id,
+            'total_amount' => $total,
+            'subtotal' => $subtotal,
+            'tax' => $tax,
+            'shipping_address' => $address->address_line_1,
+            'shipping_city' => $address->city,
+            'shipping_state' => $address->state,
+            'shipping_postal_code' => $address->postal_code,
+            'shipping_country' => $address->country,
             'payment_method' => $request->payment_method,
-            'coupon_code' => $request->coupon_code,
+            'payment_status' => 'pending',
+            'status' => 'pending',
             'notes' => $request->notes,
         ]);
 
-        if (isset($response['order'])) {
-            return redirect()->route('customer.orders')->with('success', 'Order placed successfully!');
+        // Create order items
+        foreach ($cartItems as $item) {
+            $order->items()->create([
+                'product_id' => $item->product_id,
+                'quantity' => $item->quantity,
+                'price' => $item->price,              // Original price
+                'final_price' => $item->final_price,  // Price after discount
+            ]);
+
+            // Decrease product stock
+            $product = $item->product;
+            $product->stock -= $item->quantity;
+            $product->save();
         }
 
-        return back()->with('error', $response['message'] ?? 'Failed to place order');
+        // Clear cart (don't update total_amount since it doesn't exist)
+        CartItem::where('cart_id', $cart->id)->delete();
+
+        return redirect()->route('customer.orders')->with('success', 'Order placed successfully!');
     }
 
     /**
@@ -185,11 +329,8 @@ class CustomerController extends Controller
      */
     public function profile()
     {
-        $response = $this->api->getProfile();
-        $user = $response['data'] ?? [];
-
-        $addressesResponse = $this->api->getAddresses();
-        $addresses = $addressesResponse['data'] ?? [];
+        $user = Auth::user()->toArray();
+        $addresses = UserAddress::where('user_id', Auth::id())->get()->toArray();
 
         return view('customer.profile', compact('user', 'addresses'));
     }
@@ -199,16 +340,19 @@ class CustomerController extends Controller
      */
     public function updateProfile(Request $request)
     {
+        $user = Auth::user();
+        
         $data = $request->only(['name', 'phone', 'bio']);
+        $user->update($data);
 
-        $response = $this->api->updateProfile($data);
+        session()->put('user', [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $user->role,
+        ]);
 
-        if (isset($response['data'])) {
-            session()->put('user', $response['data']);
-            return redirect()->back()->with('success', 'Profile updated successfully!');
-        }
-
-        return back()->with('error', 'Failed to update profile');
+        return redirect()->back()->with('success', 'Profile updated successfully!');
     }
 
     /**
@@ -216,8 +360,7 @@ class CustomerController extends Controller
      */
     public function addresses()
     {
-        $response = $this->api->getAddresses();
-        $addresses = $response['data'] ?? [];
+        $addresses = UserAddress::where('user_id', Auth::id())->get()->toArray();
 
         return view('customer.addresses', compact('addresses'));
     }
@@ -228,7 +371,7 @@ class CustomerController extends Controller
     public function storeAddress(Request $request)
     {
         $request->validate([
-            'label' => 'required|string',
+            'label' => 'required|string|max:50',
             'address_line_1' => 'required|string',
             'city' => 'required|string',
             'state' => 'required|string',
@@ -236,13 +379,19 @@ class CustomerController extends Controller
             'country' => 'required|string',
         ]);
 
-        $response = $this->api->createAddress($request->all());
+        UserAddress::create([
+            'user_id' => Auth::id(),
+            'label' => $request->label,
+            'address_line_1' => $request->address_line_1,
+            'address_line_2' => $request->address_line_2,
+            'city' => $request->city,
+            'state' => $request->state,
+            'postal_code' => $request->postal_code,
+            'country' => $request->country,
+            'is_default' => $request->is_default ?? false,
+        ]);
 
-        if (isset($response['data'])) {
-            return redirect()->back()->with('success', 'Address added successfully!');
-        }
-
-        return back()->with('error', 'Failed to add address');
+        return redirect()->back()->with('success', 'Address added successfully!');
     }
 
     /**
@@ -251,17 +400,18 @@ class CustomerController extends Controller
     public function storeReview(Request $request)
     {
         $request->validate([
-            'product_id' => 'required',
+            'product_id' => 'required|exists:products,id',
             'rating' => 'required|integer|min:1|max:5',
             'comment' => 'required|string',
         ]);
 
-        $response = $this->api->createReview($request->all());
+        Review::create([
+            'user_id' => Auth::id(),
+            'product_id' => $request->product_id,
+            'rating' => $request->rating,
+            'comment' => $request->comment,
+        ]);
 
-        if (isset($response['data'])) {
-            return redirect()->back()->with('success', 'Review submitted successfully!');
-        }
-
-        return back()->with('error', 'Failed to submit review');
+        return redirect()->back()->with('success', 'Review submitted successfully!');
     }
 }

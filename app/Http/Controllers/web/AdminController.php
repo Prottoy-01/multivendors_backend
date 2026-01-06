@@ -3,48 +3,55 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use App\Services\ApiService;
+use App\Models\User;
+use App\Models\Vendor;
+use App\Models\Category;
+use App\Models\Order;
+use App\Models\Product;
+use App\Models\Coupon;
 use Illuminate\Http\Request;
 
 class AdminController extends Controller
 {
-    protected $api;
-
-    public function __construct(ApiService $api)
-    {
-        $this->api = $api;
-    }
-
     /**
      * Admin dashboard
      */
     public function dashboard()
     {
-        $response = $this->api->getAdminOverview();
-        $overview = $response['data'] ?? [];
+        $overview = [
+            'total_users' => User::count(),
+            'total_vendors' => Vendor::count(),
+            'total_products' => Product::count(),
+            'total_orders' => Order::count(),
+            'total_revenue' => Order::where('payment_status', 'paid')->sum('total_amount'),
+            'monthly_revenue' => Order::where('payment_status', 'paid')
+                ->whereMonth('created_at', date('m'))
+                ->whereYear('created_at', date('Y'))
+                ->sum('total_amount'),
+            'today_revenue' => Order::where('payment_status', 'paid')
+                ->whereDate('created_at', today())
+                ->sum('total_amount'),
+            'pending_vendors' => Vendor::where('status', 'pending')->count(), // ✅ FIXED THIS LINE
+        ];
 
         return view('admin.dashboard', compact('overview'));
     }
 
     /**
-     * Users management
+     * Users list
      */
     public function users()
     {
-        $response = $this->api->getUsers();
-        $users = $response['data'] ?? [];
-
+        $users = User::orderBy('created_at', 'desc')->get()->toArray();
         return view('admin.users', compact('users'));
     }
 
     /**
-     * Vendors management
+     * Vendors list
      */
     public function vendors()
     {
-        $response = $this->api->getVendors();
-        $vendors = $response['data'] ?? [];
-
+        $vendors = Vendor::with('user')->orderBy('created_at', 'desc')->get()->toArray();
         return view('admin.vendors', compact('vendors'));
     }
 
@@ -53,13 +60,11 @@ class AdminController extends Controller
      */
     public function approveVendor($id)
     {
-        $response = $this->api->approveVendor($id);
+        $vendor = Vendor::findOrFail($id);
+        $vendor->status = 'approved'; // ✅ Using 'status' column
+        $vendor->save();
 
-        if (isset($response['message'])) {
-            return redirect()->back()->with('success', 'Vendor approved successfully!');
-        }
-
-        return back()->with('error', 'Failed to approve vendor');
+        return redirect()->back()->with('success', 'Vendor approved successfully!');
     }
 
     /**
@@ -67,29 +72,23 @@ class AdminController extends Controller
      */
     public function categories()
     {
-        $response = $this->api->getCategories();
-        $categories = $response['data'] ?? [];
-
+        $categories = Category::orderBy('name')->get()->toArray();
         return view('admin.categories', compact('categories'));
     }
 
     /**
-     * Store new category
+     * Store category
      */
     public function storeCategory(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|max:100|unique:categories',
             'description' => 'nullable|string',
         ]);
 
-        $response = $this->api->createCategory($request->all());
+        Category::create($request->all());
 
-        if (isset($response['data'])) {
-            return redirect()->back()->with('success', 'Category created successfully!');
-        }
-
-        return back()->with('error', 'Failed to create category');
+        return redirect()->back()->with('success', 'Category created successfully!');
     }
 
     /**
@@ -98,62 +97,62 @@ class AdminController extends Controller
     public function updateCategory(Request $request, $id)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'required|string|max:100|unique:categories,name,' . $id,
             'description' => 'nullable|string',
         ]);
 
-        $response = $this->api->updateCategory($id, $request->all());
+        $category = Category::findOrFail($id);
+        $category->update($request->all());
 
-        if (isset($response['data'])) {
-            return redirect()->back()->with('success', 'Category updated successfully!');
-        }
-
-        return back()->with('error', 'Failed to update category');
+        return redirect()->back()->with('success', 'Category updated successfully!');
     }
 
     /**
      * Delete category
      */
-    public function deleteCategory($id)
+    public function destroyCategory($id)
     {
-        $response = $this->api->deleteCategory($id);
-
-        if (isset($response['message'])) {
-            return redirect()->back()->with('success', 'Category deleted successfully!');
+        $category = Category::findOrFail($id);
+        
+        // Check if category has products
+        if ($category->products()->count() > 0) {
+            return redirect()->back()->with('error', 'Cannot delete category with products!');
         }
 
-        return back()->with('error', 'Failed to delete category');
+        $category->delete();
+
+        return redirect()->back()->with('success', 'Category deleted successfully!');
     }
 
     /**
-     * Orders management
+     * Orders list
      */
     public function orders()
     {
-        $response = $this->api->getAdminOrders();
-        $orders = $response['data'] ?? [];
+        $orders = Order::with(['user', 'items.product', 'items.vendor'])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->toArray();
 
         return view('admin.orders', compact('orders'));
     }
 
     /**
-     * Coupons management
+     * Coupons list
      */
     public function coupons()
     {
-        $response = $this->api->getCoupons();
-        $coupons = $response['data'] ?? [];
-
+        $coupons = Coupon::orderBy('created_at', 'desc')->get()->toArray();
         return view('admin.coupons', compact('coupons'));
     }
 
     /**
-     * Store new coupon
+     * Store coupon
      */
     public function storeCoupon(Request $request)
     {
         $request->validate([
-            'code' => 'required|string|max:255',
+            'code' => 'required|string|unique:coupons|max:50',
             'type' => 'required|in:percentage,fixed',
             'value' => 'required|numeric|min:0',
             'min_order_amount' => 'nullable|numeric|min:0',
@@ -163,12 +162,8 @@ class AdminController extends Controller
             'valid_until' => 'required|date|after:valid_from',
         ]);
 
-        $response = $this->api->createCoupon($request->all());
+        Coupon::create($request->all());
 
-        if (isset($response['data'])) {
-            return redirect()->back()->with('success', 'Coupon created successfully!');
-        }
-
-        return back()->with('error', 'Failed to create coupon');
+        return redirect()->back()->with('success', 'Coupon created successfully!');
     }
 }
