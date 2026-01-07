@@ -165,7 +165,7 @@ public function vendorDetails($id)
     /**
      * Delete category
      */
-    public function destroyCategory($id)
+    public function deleteCategory($id)
     {
         $category = Category::findOrFail($id);
         

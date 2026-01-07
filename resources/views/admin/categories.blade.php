@@ -101,7 +101,7 @@
                                                         </div>
                                                         <div class="mb-3">
                                                             <label class="form-label">Description</label>
-                                                            <textarea class="form-control" name="description" rows="3">{{ $category['description'] }}</textarea>
+                                                           <textarea class="form-control" name="description" rows="3">{{ $category['description'] ?? '' }}</textarea>
                                                         </div>
                                                     </div>
                                                     <div class="modal-footer">
