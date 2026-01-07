@@ -29,7 +29,7 @@ class VendorController extends Controller
         $totalRevenue = OrderItem::whereIn('product_id', $productIds)
             ->get()
             ->sum(function($item) {
-                return $item->quantity * $item->price;
+                return $item->quantity * $item->final_price;
             });
         
         // Get analytics
@@ -81,6 +81,14 @@ class VendorController extends Controller
      */
     public function createProduct()
     {
+        $vendor = Vendor::where('user_id', Auth::id())->firstOrFail();
+        
+        // ✅ STEP 5: Check if vendor is approved
+        if ($vendor->status !== 'approved') {
+            return redirect()->route('vendor.dashboard')
+                ->with('error', 'Your vendor account must be approved before you can add products. Current status: ' . ucfirst($vendor->status));
+        }
+
         $categories = Category::orderBy('name')->get()->toArray();
         return view('vendor.products.create', compact('categories'));
     }
@@ -92,8 +100,10 @@ class VendorController extends Controller
     {
         $vendor = Vendor::where('user_id', Auth::id())->firstOrFail();
         
+        // ✅ STEP 5: Check if vendor is approved
         if ($vendor->status !== 'approved') {
-            return redirect()->back()->with('error', 'Your vendor account is not approved yet.');
+            return redirect()->route('vendor.dashboard')
+                ->with('error', 'Your vendor account must be approved before you can add products. Current status: ' . ucfirst($vendor->status));
         }
 
         $request->validate([
@@ -145,6 +155,12 @@ class VendorController extends Controller
     {
         $vendor = Vendor::where('user_id', Auth::id())->firstOrFail();
         
+        // ✅ STEP 5: Check if vendor is approved
+        if ($vendor->status !== 'approved') {
+            return redirect()->route('vendor.dashboard')
+                ->with('error', 'Your vendor account must be approved before you can edit products. Current status: ' . ucfirst($vendor->status));
+        }
+        
         $product = Product::where('vendor_id', $vendor->id)
             ->where('id', $id)
             ->with(['category', 'images'])
@@ -164,6 +180,12 @@ class VendorController extends Controller
     public function updateProduct(Request $request, $id)
     {
         $vendor = Vendor::where('user_id', Auth::id())->firstOrFail();
+        
+        // ✅ STEP 5: Check if vendor is approved
+        if ($vendor->status !== 'approved') {
+            return redirect()->route('vendor.dashboard')
+                ->with('error', 'Your vendor account must be approved before you can update products. Current status: ' . ucfirst($vendor->status));
+        }
         
         $product = Product::where('vendor_id', $vendor->id)
             ->where('id', $id)
@@ -218,6 +240,12 @@ class VendorController extends Controller
     {
         $vendor = Vendor::where('user_id', Auth::id())->firstOrFail();
         
+        // ✅ STEP 5: Check if vendor is approved
+        if ($vendor->status !== 'approved') {
+            return redirect()->route('vendor.dashboard')
+                ->with('error', 'Your vendor account must be approved before you can delete products. Current status: ' . ucfirst($vendor->status));
+        }
+        
         $product = Product::where('vendor_id', $vendor->id)
             ->where('id', $id)
             ->firstOrFail();
@@ -260,6 +288,15 @@ class VendorController extends Controller
      */
     public function updateOrderStatus(Request $request, $id)
     {
+        $vendor = Vendor::where('user_id', Auth::id())->firstOrFail();
+        
+        // ✅ STEP 5: Check if vendor is approved (optional for order management)
+        // You can decide if rejected vendors should still be able to manage existing orders
+        if ($vendor->status === 'rejected') {
+            return redirect()->route('vendor.dashboard')
+                ->with('error', 'Your vendor account has been rejected. Please contact support.');
+        }
+
         $request->validate([
             'status' => 'required|in:pending,processing,shipped,delivered,cancelled'
         ]);
@@ -321,10 +358,10 @@ class VendorController extends Controller
         // Get vendor's product IDs
         $productIds = Product::where('vendor_id', $vendor->id)->pluck('id');
         
-        // Calculate revenue
+        // Calculate revenue using final_price
         $orderItems = OrderItem::whereIn('product_id', $productIds)->get();
         $totalRevenue = $orderItems->sum(function($item) {
-            return $item->quantity * $item->price;
+            return $item->quantity * $item->final_price;
         });
         
         $avgOrderValue = $orderItems->count() > 0 

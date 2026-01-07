@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\Coupon;
 use Illuminate\Http\Request;
+use App\Models\OrderItem; 
 
 class AdminController extends Controller
 {
@@ -67,6 +68,58 @@ class AdminController extends Controller
         return redirect()->back()->with('success', 'Vendor approved successfully!');
     }
 
+    /**
+ * Reject vendor
+ */
+public function rejectVendor($id)
+{
+    $vendor = Vendor::findOrFail($id);
+    $vendor->status = 'rejected';
+    $vendor->save();
+
+    return redirect()->back()->with('success', 'Vendor rejected successfully!');
+}
+/**
+ * Show vendor details
+ */
+public function vendorDetails($id)
+{
+    $vendor = Vendor::with(['user', 'products.category', 'products.images'])
+        ->findOrFail($id);
+    
+    $vendor = $vendor->toArray();
+    
+    // Get vendor statistics
+    $productIds = Product::where('vendor_id', $id)->pluck('id');
+    
+    $stats = [
+        'total_products' => Product::where('vendor_id', $id)->count(),
+        'total_orders' => Order::whereHas('items', function($q) use ($productIds) {
+            $q->whereIn('product_id', $productIds);
+        })->count(),
+        'total_revenue' => OrderItem::whereIn('product_id', $productIds)
+            ->get()
+            ->sum(function($item) {
+                return $item->quantity * $item->final_price;
+            }),
+        'pending_orders' => Order::whereHas('items', function($q) use ($productIds) {
+            $q->whereIn('product_id', $productIds);
+        })->where('status', 'pending')->count(),
+        'completed_orders' => Order::whereHas('items', function($q) use ($productIds) {
+            $q->whereIn('product_id', $productIds);
+        })->where('status', 'delivered')->count(),
+    ];
+    
+    // Get recent products
+    $products = Product::where('vendor_id', $id)
+        ->with(['category', 'images'])
+        ->orderBy('created_at', 'desc')
+        ->limit(10)
+        ->get()
+        ->toArray();
+
+    return view('admin.vendor-details', compact('vendor', 'stats', 'products'));
+}
     /**
      * Categories management
      */
