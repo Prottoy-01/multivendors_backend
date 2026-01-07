@@ -54,62 +54,72 @@
             <a href="{{ route('products.index') }}" class="btn btn-outline-primary">View All</a>
         </div>
         
-        <div class="row">
-            @forelse($products as $product)
-            <div class="col-md-3 col-sm-6 mb-4">
-                <div class="card product-card h-100">
-                    @if(!empty($product['image_urls']) && count($product['image_urls']) > 0)
-                        <img src="{{ $product['image_urls'][0] }}" class="card-img-top" alt="{{ $product['name'] }}" style="height: 200px; object-fit: cover;">
-                    @else
-                        <img src="https://via.placeholder.com/300x200?text=No+Image" class="card-img-top" alt="No Image">
-                    @endif
-                    
-                    <div class="card-body">
-                        <h5 class="card-title">{{ Str::limit($product['name'], 30) }}</h5>
-                        <p class="card-text text-muted small">{{ Str::limit($product['description'], 50) }}</p>
-                        
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <div>
-                                @if($product['has_offer'] && $product['final_price'] < $product['price'])
-                                    <span class="text-muted text-decoration-line-through">${{ number_format($product['price'], 2) }}</span>
-                                    <span class="text-danger fw-bold ms-2">${{ number_format($product['final_price'], 2) }}</span>
-                                @else
-                                    <span class="text-primary fw-bold">${{ number_format($product['price'], 2) }}</span>
-                                @endif
-                            </div>
-                            <div>
-                                @if(!empty($product['average_rating']))
-                                    <span class="badge bg-warning text-dark">
-                                        <i class="fas fa-star"></i> {{ number_format($product['average_rating'], 1) }}
-                                    </span>
-                                @endif
-                            </div>
-                        </div>
-                        
-                        <div class="d-flex gap-2">
-                            <a href="{{ route('products.show', $product['id']) }}" class="btn btn-primary btn-sm flex-grow-1">
-                                <i class="fas fa-eye"></i> View
-                            </a>
-                            @if(Session::has('user') && Session::get('user')['role'] === 'customer')
-                                <form action="{{ route('customer.cart.add') }}" method="POST" class="flex-grow-1">
-                                    @csrf
-                                    <input type="hidden" name="product_id" value="{{ $product['id'] }}">
-                                    <button type="submit" class="btn btn-success btn-sm w-100">
-                                        <i class="fas fa-cart-plus"></i> Cart
-                                    </button>
-                                </form>
-                            @endif
-                        </div>
+      <div class="row">
+    @forelse($products as $product)
+    <div class="col-md-3 col-sm-6 mb-4">
+        <div class="card product-card h-100">
+            @if(!empty($product['image_urls']) && count($product['image_urls']) > 0)
+                <img src="{{ $product['image_urls'][0] }}" class="card-img-top" alt="{{ $product['name'] }}" style="height: 200px; object-fit: cover;">
+            @else
+                <img src="https://via.placeholder.com/300x200?text=No+Image" class="card-img-top" alt="No Image">
+            @endif
+            
+            <div class="card-body">
+                <h5 class="card-title">{{ Str::limit($product['name'], 30) }}</h5>
+                <p class="card-text text-muted small">{{ Str::limit($product['description'], 50) }}</p>
+                
+                {{-- Rating Display --}}
+                @if(!empty($product['avg_rating']) && $product['avg_rating'] > 0)
+                    <div class="mb-2">
+                        <span class="badge bg-warning text-dark">
+                            <i class="fas fa-star"></i> {{ number_format($product['avg_rating'], 1) }}
+                        </span>
+                        <small class="text-muted">
+                            ({{ $product['review_count'] ?? 0 }} {{ Str::plural('review', $product['review_count'] ?? 0) }})
+                        </small>
                     </div>
+                @else
+                    <div class="mb-2">
+                        <small class="text-muted">No reviews yet</small>
+                    </div>
+                @endif
+                
+                {{-- Price Display --}}
+                <div class="mb-3">
+                    @if($product['has_offer'] && $product['final_price'] < $product['price'])
+                        <span class="text-muted text-decoration-line-through">${{ number_format($product['price'], 2) }}</span>
+                        <span class="text-danger fw-bold ms-2">${{ number_format($product['final_price'], 2) }}</span>
+                    @else
+                        <span class="text-primary fw-bold">${{ number_format($product['price'], 2) }}</span>
+                    @endif
+                </div>
+                
+                {{-- Action Buttons --}}
+                <div class="d-flex gap-2">
+                    <a href="{{ route('products.show', $product['id']) }}" class="btn btn-primary btn-sm flex-grow-1">
+                        <i class="fas fa-eye"></i> View
+                    </a>
+                    @if(Session::has('user') && Session::get('user')['role'] === 'customer')
+                        <form action="{{ route('customer.cart.add') }}" method="POST" class="flex-grow-1">
+                            @csrf
+                            <input type="hidden" name="product_id" value="{{ $product['id'] }}">
+                            <button type="submit" class="btn btn-success btn-sm w-100">
+                                <i class="fas fa-cart-plus"></i> Cart
+                            </button>
+                        </form>
+                    @endif
                 </div>
             </div>
-            @empty
-            <div class="col-12">
-                <div class="alert alert-info">No products available at the moment.</div>
-            </div>
-            @endforelse
         </div>
     </div>
+    @empty
+    <div class="col-12">
+        <div class="alert alert-info text-center">
+            <i class="fas fa-info-circle"></i> No products available at the moment.
+        </div>
+    </div>
+    @endforelse
+</div>
 
     <!-- Features Section -->
     <div class="row mb-5">

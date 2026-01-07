@@ -15,11 +15,23 @@ class HomeController extends Controller
     public function index()
     {
         // Get featured products directly from database
+        // $products = Product::with(['vendor', 'category', 'images'])
+        //     ->orderBy('created_at', 'desc')
+        //     ->limit(8)
+        //     ->get()
+        //     ->toArray();
         $products = Product::with(['vendor', 'category', 'images'])
-            ->orderBy('created_at', 'desc')
-            ->limit(8)
-            ->get()
-            ->toArray();
+    ->withAvg(['reviews' => function ($q) {
+        $q->where('is_approved', true);
+    }], 'rating')
+    ->withCount(['reviews as review_count' => function ($q) {
+        $q->where('is_approved', true);
+    }])
+    ->orderBy('created_at', 'desc')
+    ->limit(8)
+    ->get()
+    ->toArray();
+
         
         // Get categories directly from database
         $categories = Category::orderBy('name')->get()->toArray();
@@ -32,7 +44,15 @@ class HomeController extends Controller
      */
     public function products(Request $request)
     {
-        $query = Product::with(['vendor', 'category', 'images']);
+       // $query = Product::with(['vendor', 'category', 'images']);
+       $query = Product::with(['vendor', 'category', 'images'])
+    ->withAvg(['reviews' => function ($q) {
+        $q->where('is_approved', true);
+    }], 'rating')
+    ->withCount(['reviews as review_count' => function ($q) {
+        $q->where('is_approved', true);
+    }]);
+
 
         // Search
         if ($request->has('search') && $request->search != '') {
