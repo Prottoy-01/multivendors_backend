@@ -62,7 +62,7 @@
                             @endforeach
                         </div>
                         <div class="col-md-4 text-end">
-                            <h5>Total: ${{ number_format($order['total_amount'], 2) }}</h5>
+                            <h5>Total: ${{ number_format($order['grand_total'], 2) }}</h5>
                             <p class="text-muted mb-2">
                                 Payment: 
                                 @if($order['payment_status'] === 'paid')

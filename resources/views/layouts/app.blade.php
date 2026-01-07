@@ -1,6 +1,36 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+
+<style>
+/* Star Rating Styles */
+.rating-stars {
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+    font-size: 2rem;
+}
+
+.rating-stars input[type="radio"] {
+    display: none;
+}
+
+.rating-stars label {
+    cursor: pointer;
+    color: #ddd;
+    transition: color 0.2s;
+}
+
+.rating-stars label:hover,
+.rating-stars label:hover ~ label,
+.rating-stars input[type="radio"]:checked ~ label {
+    color: #ffc107;
+}
+
+.rating-stars label:hover {
+    transform: scale(1.1);
+}
+</style>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">

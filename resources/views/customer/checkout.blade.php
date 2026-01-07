@@ -24,19 +24,30 @@
                     <div class="card-body">
                         @if(count($addresses) > 0)
                             @foreach($addresses as $address)
-                            <div class="form-check mb-3 p-3 border rounded">
+                            <div class="form-check mb-3 p-3 border rounded {{ $loop->first ? 'border-primary' : '' }}">
                                 <input class="form-check-input" type="radio" name="address_id" 
                                        id="address{{ $address['id'] }}" value="{{ $address['id'] }}" 
                                        {{ $loop->first ? 'checked' : '' }} required>
                                 <label class="form-check-label w-100" for="address{{ $address['id'] }}">
-                                    <strong>{{ $address['label'] }}</strong>
-                                    <br>
-                                    {{ $address['address_line_1'] }}
-                                    @if($address['address_line_2']), {{ $address['address_line_2'] }}@endif
-                                    <br>
-                                    {{ $address['city'] }}, {{ $address['state'] }} {{ $address['postal_code'] }}
-                                    <br>
-                                    {{ $address['country'] }}
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <strong class="text-primary">{{ $address['recipient_name'] }}</strong>
+                                            @if($address['is_default'])
+                                                <span class="badge bg-success ms-2">Default</span>
+                                            @endif
+                                        </div>
+                                    </div>
+                                    <hr class="my-2">
+                                    <p class="mb-0">
+                                        <i class="fas fa-phone text-primary"></i> 
+                                        <strong>Phone:</strong> {{ $address['phone'] }}
+                                    </p>
+                                    <p class="mb-0 mt-1">
+                                        <i class="fas fa-map-marker-alt text-danger"></i>
+                                        {{ $address['address_line'] }}<br>
+                                        <span class="ms-4">{{ $address['city'] }}, {{ $address['state'] }} {{ $address['postal_code'] }}</span><br>
+                                        <span class="ms-4">{{ $address['country'] }}</span>
+                                    </p>
                                 </label>
                             </div>
                             @endforeach
@@ -47,7 +58,7 @@
                             <div class="alert alert-warning">
                                 <i class="fas fa-exclamation-triangle"></i> 
                                 You don't have any saved addresses. 
-                                <a href="{{ route('customer.addresses') }}">Add an address first.</a>
+                                <a href="{{ route('customer.addresses') }}" class="alert-link">Add an address first.</a>
                             </div>
                         @endif
                     </div>
@@ -59,25 +70,48 @@
                         <h5 class="mb-0"><i class="fas fa-credit-card"></i> Payment Method</h5>
                     </div>
                     <div class="card-body">
-                        <div class="form-check mb-3">
+                        <div class="form-check mb-3 p-3 border rounded border-primary">
                             <input class="form-check-input" type="radio" name="payment_method" 
                                    id="cod" value="cash_on_delivery" checked required>
-                            <label class="form-check-label" for="cod">
-                                <i class="fas fa-money-bill-wave"></i> Cash on Delivery
+                            <label class="form-check-label w-100" for="cod">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-money-bill-wave fa-2x text-success me-3"></i>
+                                    <div>
+                                        <strong>Cash on Delivery</strong>
+                                        <br>
+                                        <small class="text-muted">Pay when you receive your order</small>
+                                    </div>
+                                </div>
                             </label>
                         </div>
-                        <div class="form-check mb-3">
+                        
+                        <div class="form-check mb-3 p-3 border rounded">
                             <input class="form-check-input" type="radio" name="payment_method" 
                                    id="card" value="card">
-                            <label class="form-check-label" for="card">
-                                <i class="fas fa-credit-card"></i> Credit/Debit Card
+                            <label class="form-check-label w-100" for="card">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-credit-card fa-2x text-primary me-3"></i>
+                                    <div>
+                                        <strong>Credit/Debit Card</strong>
+                                        <br>
+                                        <small class="text-muted">Visa, MasterCard, American Express</small>
+                                    </div>
+                                </div>
                             </label>
                         </div>
-                        <div class="form-check">
+                        
+                        <div class="form-check p-3 border rounded">
                             <input class="form-check-input" type="radio" name="payment_method" 
                                    id="bank" value="bank_transfer">
-                            <label class="form-check-label" for="bank">
-                                <i class="fas fa-university"></i> Bank Transfer
+                            <label class="form-check-label w-100" for="bank">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-university fa-2x text-info me-3"></i>
+                                    <div>
+                                        <strong>Bank Transfer</strong>
+                                        <br>
+                                        <small class="text-muted">Direct bank account transfer</small>
+                                    </div>
+                                </div>
                             </label>
                         </div>
                     </div>
@@ -97,18 +131,30 @@
 
             <!-- Order Summary -->
             <div class="col-md-4">
-                <div class="card cart-summary">
+                <div class="card cart-summary sticky-top" style="top: 20px;">
                     <div class="card-header bg-success text-white">
-                        <h5 class="mb-0">Order Summary</h5>
+                        <h5 class="mb-0"><i class="fas fa-shopping-bag"></i> Order Summary</h5>
                     </div>
                     <div class="card-body">
                         <h6 class="mb-3">Order Items ({{ count($cart['items']) }})</h6>
-                        @foreach($cart['items'] as $item)
-                        <div class="d-flex justify-content-between mb-2">
-                            <small>{{ Str::limit($item['product']['name'], 20) }} × {{ $item['quantity'] }}</small>
-                            <small>${{ number_format($item['quantity'] * $item['price'], 2) }}</small>
+                        
+                        <div style="max-height: 300px; overflow-y: auto;">
+                            @foreach($cart['items'] as $item)
+                            <div class="d-flex align-items-center mb-3 pb-2 border-bottom">
+                                @if(!empty($item['product']['image_urls']) && count($item['product']['image_urls']) > 0)
+                                    <img src="{{ $item['product']['image_urls'][0] }}" 
+                                         alt="{{ $item['product']['name'] }}" 
+                                         style="width: 50px; height: 50px; object-fit: cover;" 
+                                         class="rounded me-2">
+                                @endif
+                                <div class="flex-grow-1">
+                                    <small class="d-block">{{ Str::limit($item['product']['name'], 30) }}</small>
+                                    <small class="text-muted">{{ $item['quantity'] }} × ${{ number_format($item['final_price'], 2) }}</small>
+                                </div>
+                                <strong class="text-end">${{ number_format($item['quantity'] * $item['final_price'], 2) }}</strong>
+                            </div>
+                            @endforeach
                         </div>
-                        @endforeach
                         
                         <hr>
                         
@@ -127,15 +173,18 @@
                         
                         <hr>
                         
-                        <div class="d-flex justify-content-between mb-3">
-                            <strong>Total:</strong>
+                        <div class="d-flex justify-content-between mb-4">
+                            <strong class="fs-5">Total:</strong>
                             <h4 class="text-success mb-0">${{ number_format($cart['total'], 2) }}</h4>
                         </div>
                         
-                        <div class="d-grid">
+                        <div class="d-grid gap-2">
                             <button type="submit" class="btn btn-success btn-lg">
                                 <i class="fas fa-check-circle"></i> Place Order
                             </button>
+                            <a href="{{ route('customer.cart') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left"></i> Back to Cart
+                            </a>
                         </div>
                         
                         <div class="text-center mt-3">

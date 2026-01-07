@@ -54,20 +54,25 @@
                 </p>
             @endif
 
-            @if(!empty($product['average_rating']) && $product['average_rating'] > 0)
-                <div class="mb-3">
-                    <span class="rating-stars">
-                        @for($i = 1; $i <= 5; $i++)
-                            @if($i <= $product['average_rating'])
-                                <i class="fas fa-star"></i>
-                            @else
-                                <i class="far fa-star"></i>
-                            @endif
-                        @endfor
-                    </span>
-                    <span class="ms-2">{{ number_format($product['average_rating'], 1) }} ({{ $product['total_reviews'] }} reviews)</span>
-                </div>
-            @endif
+           @if(!empty($product['avg_rating']) && $product['avg_rating'] > 0)
+    <div class="mb-3">
+        <span class="rating-stars text-warning">
+            @for($i = 1; $i <= 5; $i++)
+                @if($i <= round($product['avg_rating']))
+                    <i class="fas fa-star"></i>
+                @else
+                    <i class="far fa-star"></i>
+                @endif
+            @endfor
+        </span>
+
+        <span class="ms-2">
+            {{ number_format($product['avg_rating'], 1) }}
+            ({{ $product['review_count'] ?? 0 }} reviews)
+        </span>
+    </div>
+@endif
+
 
             <div class="mb-3">
                 @if($product['has_offer'] && $product['final_price'] < $product['price'])
@@ -140,38 +145,116 @@
     </div>
 
     <!-- Reviews Section -->
-    <div class="row mt-5">
-        <div class="col-md-12">
-            <h3>Customer Reviews</h3>
-            
-            @if(count($reviews) > 0)
-                @foreach($reviews as $review)
-                <div class="card mb-3">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between">
-                            <div>
-                                <strong>{{ $review['user']['name'] ?? 'Anonymous' }}</strong>
-                                <div class="rating-stars">
-                                    @for($i = 1; $i <= 5; $i++)
-                                        @if($i <= $review['rating'])
-                                            <i class="fas fa-star"></i>
-                                        @else
-                                            <i class="far fa-star"></i>
-                                        @endif
-                                    @endfor
-                                </div>
-                            </div>
-                            <small class="text-muted">{{ date('M d, Y', strtotime($review['created_at'])) }}</small>
+   {{-- Reviews Section --}}
+<div class="card mt-4">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0">
+            <i class="fas fa-star"></i> Customer Reviews
+            @if(isset($product['review_count']) && $product['review_count'] > 0)
+                ({{ $product['review_count'] }})
+            @endif
+        </h5>
+    </div>
+    <div class="card-body">
+        @if(isset($product['avg_rating']) && $product['avg_rating'] > 0)
+            <div class="mb-4 p-3 bg-light rounded">
+                <div class="row align-items-center">
+                    <div class="col-md-3 text-center">
+                        <h1 class="display-3 mb-0">{{ number_format($product['avg_rating'], 1) }}</h1>
+                        <div class="text-warning mb-2">
+                            @for($i = 1; $i <= 5; $i++)
+                                @if($i <= $product['avg_rating'])
+                                    <i class="fas fa-star"></i>
+                                @else
+                                    <i class="far fa-star"></i>
+                                @endif
+                            @endfor
                         </div>
-                        <p class="mt-2 mb-0">{{ $review['comment'] }}</p>
+                        <small class="text-muted">Based on {{ $product['review_count'] }} reviews</small>
+                    </div>
+                    <div class="col-md-9">
+                        {{-- Rating Bars (optional) --}}
+                        @php
+                            $reviews = \App\Models\Review::where('product_id', $product['id'])
+                                ->where('is_approved', true)
+                                ->selectRaw('rating, COUNT(*) as count')
+                                ->groupBy('rating')
+                                ->orderBy('rating', 'desc')
+                                ->get()
+                                ->pluck('count', 'rating');
+                            $totalReviews = $product['review_count'];
+                        @endphp
+                        
+                        @for($i = 5; $i >= 1; $i--)
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="me-2" style="width: 60px;">{{ $i }} star</span>
+                                <div class="progress flex-grow-1 me-2" style="height: 20px;">
+                                    @php
+                                        $count = $reviews->get($i, 0);
+                                        $percentage = $totalReviews > 0 ? ($count / $totalReviews * 100) : 0;
+                                    @endphp
+                                    <div class="progress-bar bg-warning" 
+                                         role="progressbar" 
+                                         style="width: {{ $percentage }}%">
+                                    </div>
+                                </div>
+                                <span style="width: 40px;">{{ $count }}</span>
+                            </div>
+                        @endfor
                     </div>
                 </div>
-                @endforeach
-            @else
+            </div>
+        @endif
+
+        {{-- Individual Reviews --}}
+        @php
+            $reviews = \App\Models\Review::where('product_id', $product['id'])
+                ->where('is_approved', true)
+                ->with('user')
+                ->orderBy('created_at', 'desc')
+                ->paginate(10);
+        @endphp
+
+        @forelse($reviews as $review)
+            <div class="review-item mb-4 pb-3 border-bottom">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <strong>{{ $review->user->name }}</strong>
+                        <div class="text-warning">
+                            @for($i = 1; $i <= 5; $i++)
+                                @if($i <= $review->rating)
+                                    <i class="fas fa-star"></i>
+                                @else
+                                    <i class="far fa-star"></i>
+                                @endif
+                            @endfor
+                        </div>
+                    </div>
+                    <small class="text-muted">
+                        {{ $review->created_at->diffForHumans() }}
+                    </small>
+                </div>
+                <p class="mb-0">{{ $review->comment }}</p>
+                
+                @if($review->user_id === auth()->id())
+                    <span class="badge bg-info mt-2">Your Review</span>
+                @endif
+            </div>
+        @empty
+            <div class="text-center py-4">
+                <i class="fas fa-comments fa-3x text-muted mb-3"></i>
                 <p class="text-muted">No reviews yet. Be the first to review this product!</p>
-            @endif
-        </div>
+            </div>
+        @endforelse
+
+        {{-- Pagination --}}
+        @if($reviews->hasPages())
+            <div class="d-flex justify-content-center mt-4">
+                {{ $reviews->links() }}
+            </div>
+        @endif
     </div>
+</div>
 
     <!-- Related Products -->
     @if(count($relatedProducts) > 0)

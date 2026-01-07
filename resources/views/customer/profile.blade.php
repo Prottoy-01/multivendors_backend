@@ -14,33 +14,54 @@
     <div class="row">
         <!-- Profile Info -->
         <div class="col-md-8">
-            <div class="card">
+            <div class="card mb-4">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0"><i class="fas fa-user-edit"></i> Personal Information</h5>
                 </div>
                 <div class="card-body">
+                    @if(session('success'))
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            <i class="fas fa-check-circle"></i> {{ session('success') }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    @endif
+
                     <form action="{{ route('customer.profile.update') }}" method="POST">
                         @csrf
                         <div class="mb-3">
                             <label for="name" class="form-label">Full Name</label>
-                            <input type="text" class="form-control" id="name" name="name" 
-                                   value="{{ $user['name'] }}" required>
+                            <input type="text" class="form-control @error('name') is-invalid @enderror" 
+                                   id="name" name="name" value="{{ old('name', $user['name']) }}" required>
+                            @error('name')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
                         </div>
+
                         <div class="mb-3">
                             <label for="email" class="form-label">Email Address</label>
                             <input type="email" class="form-control" id="email" 
                                    value="{{ $user['email'] }}" disabled>
                             <small class="text-muted">Email cannot be changed</small>
                         </div>
+
                         <div class="mb-3">
                             <label for="phone" class="form-label">Phone Number</label>
-                            <input type="text" class="form-control" id="phone" name="phone" 
-                                   value="{{ $user['phone'] ?? '' }}">
+                            <input type="text" class="form-control @error('phone') is-invalid @enderror" 
+                                   id="phone" name="phone" value="{{ old('phone', $user['phone'] ?? '') }}">
+                            @error('phone')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
                         </div>
+
                         <div class="mb-3">
                             <label for="bio" class="form-label">Bio</label>
-                            <textarea class="form-control" id="bio" name="bio" rows="3">{{ $user['bio'] ?? '' }}</textarea>
+                            <textarea class="form-control @error('bio') is-invalid @enderror" 
+                                      id="bio" name="bio" rows="3">{{ old('bio', $user['bio'] ?? '') }}</textarea>
+                            @error('bio')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
                         </div>
+
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-save"></i> Update Profile
                         </button>
@@ -49,7 +70,7 @@
             </div>
 
             <!-- Saved Addresses -->
-            <div class="card mt-4">
+            <div class="card">
                 <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><i class="fas fa-map-marker-alt"></i> Saved Addresses</h5>
                     <a href="{{ route('customer.addresses') }}" class="btn btn-light btn-sm">
@@ -60,19 +81,22 @@
                     @if(count($addresses) > 0)
                         @foreach($addresses as $address)
                         <div class="border rounded p-3 mb-3">
-                            <div class="d-flex justify-content-between">
+                            <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <strong>{{ $address['label'] }}</strong>
+                                    <strong class="text-primary">{{ $address['recipient_name'] }}</strong>
                                     @if($address['is_default'])
                                         <span class="badge bg-success ms-2">Default</span>
                                     @endif
-                                    <br>
-                                    {{ $address['address_line_1'] }}
-                                    @if($address['address_line_2']), {{ $address['address_line_2'] }}@endif
-                                    <br>
-                                    {{ $address['city'] }}, {{ $address['state'] }} {{ $address['postal_code'] }}
-                                    <br>
-                                    {{ $address['country'] }}
+                                    <p class="mb-0 mt-2">
+                                        <i class="fas fa-phone text-primary"></i> 
+                                        <strong>Phone:</strong> {{ $address['phone'] }}
+                                    </p>
+                                    <p class="mb-0 mt-1">
+                                        <i class="fas fa-map-marker-alt text-danger"></i>
+                                        {{ $address['address_line'] }}<br>
+                                        <span class="ms-4">{{ $address['city'] }}, {{ $address['state'] }} {{ $address['postal_code'] }}</span><br>
+                                        <span class="ms-4">{{ $address['country'] }}</span>
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -97,20 +121,20 @@
 
             <div class="card">
                 <div class="card-header bg-primary text-white">
-                    <h6 class="mb-0">Quick Links</h6>
+                    <h6 class="mb-0"><i class="fas fa-link"></i> Quick Links</h6>
                 </div>
                 <div class="list-group list-group-flush">
                     <a href="{{ route('customer.orders') }}" class="list-group-item list-group-item-action">
-                        <i class="fas fa-box"></i> My Orders
+                        <i class="fas fa-box text-primary"></i> My Orders
                     </a>
                     <a href="{{ route('customer.wishlist') }}" class="list-group-item list-group-item-action">
-                        <i class="fas fa-heart"></i> My Wishlist
+                        <i class="fas fa-heart text-danger"></i> My Wishlist
                     </a>
                     <a href="{{ route('customer.cart') }}" class="list-group-item list-group-item-action">
-                        <i class="fas fa-shopping-cart"></i> Shopping Cart
+                        <i class="fas fa-shopping-cart text-success"></i> Shopping Cart
                     </a>
                     <a href="{{ route('customer.addresses') }}" class="list-group-item list-group-item-action">
-                        <i class="fas fa-map-marker-alt"></i> Manage Addresses
+                        <i class="fas fa-map-marker-alt text-warning"></i> Manage Addresses
                     </a>
                 </div>
             </div>

@@ -7,12 +7,25 @@ use Illuminate\Database\Eloquent\Model;
 class Order extends Model
 {
     protected $fillable = [
+         // User & Vendor
         'user_id',
         'vendor_id',
-        'total_amount',      // Final payable amount
-        'discount_total',    // Total discount applied
+        
+        // Money fields (ALL REQUIRED - match your database)
+        'total_amount',
+        'discount_total',
+        'coupon_id',
+        'coupon_discount',
+        'tax_amount',
+        'shipping_cost',
+        'grand_total',        // ✅ THIS WAS MISSING - causing error
+        
+        // Status fields
         'status',
-        // 🔹 Address snapshot (Step 2)
+        'payment_method',
+        'payment_status',
+        
+        // Address fields
         'recipient_name',
         'phone',
         'address_line',
@@ -25,6 +38,7 @@ class Order extends Model
     protected $casts = [
         'total_amount' => 'decimal:2',
         'discount_total' => 'decimal:2',
+        'grand_total' => 'decimal:2',
     ];
 
     /* ================= Relationships ================= */

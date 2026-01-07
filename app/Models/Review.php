@@ -17,6 +17,7 @@ class Review extends Model
         'comment',
         'is_verified_purchase',
         'is_approved',
+        
     ];
 
     protected $casts = [

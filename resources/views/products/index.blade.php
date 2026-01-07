@@ -119,11 +119,15 @@
                                     @endif
                                 </div>
                                 <div>
-                                    @if(!empty($product['average_rating']))
-                                        <span class="badge bg-warning text-dark">
-                                            <i class="fas fa-star"></i> {{ number_format($product['average_rating'], 1) }}
-                                        </span>
-                                    @endif
+                                    @if(!empty($product['avg_rating']) && $product['avg_rating'] > 0)
+    <span class="badge bg-warning text-dark">
+        <i class="fas fa-star"></i> {{ number_format($product['avg_rating'], 1) }}
+    </span>
+    <small class="text-muted ms-1">
+        ({{ $product['review_count'] ?? 0 }})
+    </small>
+@endif
+
                                 </div>
                             </div>
                             

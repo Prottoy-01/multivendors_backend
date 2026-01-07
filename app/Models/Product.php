@@ -25,6 +25,8 @@ class Product extends Model
         'discount_value',
         'offer_start',
         'offer_end',
+        'avg_rating',
+    'review_count',
     ];
 
     /**

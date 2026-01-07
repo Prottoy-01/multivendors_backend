@@ -131,7 +131,7 @@
                                         <td><strong>#{{ $order['id'] }}</strong></td>
                                         <td>{{ date('M d, Y', strtotime($order['created_at'])) }}</td>
                                         <td>{{ count($order['items']) }} items</td>
-                                        <td><strong>${{ number_format($order['total_amount'], 2) }}</strong></td>
+                                        <td><strong>${{ number_format($order['grand_total'], 2) }}</strong></td>
                                         <td>
                                             @if($order['status'] === 'delivered')
                                                 <span class="badge bg-success">Delivered</span>

@@ -261,68 +261,82 @@ class CustomerController extends Controller
     /**
      * Place order
      */
-    public function placeOrder(Request $request)
-    {
-        $request->validate([
-            'address_id' => 'required|exists:user_addresses,id',
-            'payment_method' => 'required|in:cash_on_delivery,card,bank_transfer',
-        ]);
+   public function placeOrder(Request $request)
+{
+    $request->validate([
+        'address_id' => 'required|exists:user_addresses,id',
+        'payment_method' => 'required|in:cash_on_delivery,card,bank_transfer',
+    ]);
 
-        $user = Auth::user();
-        $cart = Cart::where('user_id', $user->id)->firstOrFail();
-        $cartItems = CartItem::where('cart_id', $cart->id)->with('product')->get();
+    $user = Auth::user();
+    $cart = Cart::where('user_id', $user->id)->firstOrFail();
+    $cartItems = CartItem::where('cart_id', $cart->id)->with('product')->get();
 
-        if ($cartItems->isEmpty()) {
-            return back()->with('error', 'Your cart is empty');
-        }
+    if ($cartItems->isEmpty()) {
+        return back()->with('error', 'Your cart is empty');
+    }
 
-        // Get address
-        $address = UserAddress::findOrFail($request->address_id);
+    $address = UserAddress::findOrFail($request->address_id);
 
-        // Calculate totals using final_price
-        $subtotal = $cartItems->sum(function($item) {
+    // Group by vendor
+    $itemsByVendor = $cartItems->groupBy(function($item) {
+        return $item->product->vendor_id;
+    });
+
+    foreach ($itemsByVendor as $vendorId => $vendorItems) {
+        // Calculate amounts
+        $totalAmount = $vendorItems->sum(function($item) {
             return $item->quantity * $item->final_price;
         });
-        $tax = $subtotal * 0.1;
-        $total = $subtotal + $tax;
+        
+        $discountTotal = 0;
+        $couponDiscount = 0;
+        $taxAmount = $totalAmount * 0.10;
+        $shippingCost = 0;
+        $grandTotal = $totalAmount - $couponDiscount + $taxAmount + $shippingCost;
 
         // Create order
         $order = Order::create([
             'user_id' => $user->id,
-            'total_amount' => $total,
-            'subtotal' => $subtotal,
-            'tax' => $tax,
-            'shipping_address' => $address->address_line_1,
-            'shipping_city' => $address->city,
-            'shipping_state' => $address->state,
-            'shipping_postal_code' => $address->postal_code,
-            'shipping_country' => $address->country,
-            'payment_method' => $request->payment_method,
-            'payment_status' => 'pending',
+            'vendor_id' => $vendorId,
+            'total_amount' => $totalAmount,
+            'discount_total' => $discountTotal,
+            'coupon_id' => null,
+            'coupon_discount' => $couponDiscount,
+            'tax_amount' => $taxAmount,
+            'shipping_cost' => $shippingCost,
+            'grand_total' => $grandTotal,         // ✅ REQUIRED
             'status' => 'pending',
-            'notes' => $request->notes,
+            'payment_method' => $request->payment_method,
+            'payment_status' => 'unpaid',
+            'recipient_name' => $address->recipient_name,
+            'phone' => $address->phone,
+            'address_line' => $address->address_line,
+            'city' => $address->city,
+            'state' => $address->state,
+            'postal_code' => $address->postal_code,
+            'country' => $address->country,
         ]);
 
         // Create order items
-        foreach ($cartItems as $item) {
+        foreach ($vendorItems as $item) {
             $order->items()->create([
                 'product_id' => $item->product_id,
                 'quantity' => $item->quantity,
-                'price' => $item->price,              // Original price
-                'final_price' => $item->final_price,  // Price after discount
+                'price' => $item->price,
+                'final_price' => $item->final_price,
             ]);
 
-            // Decrease product stock
             $product = $item->product;
             $product->stock -= $item->quantity;
             $product->save();
         }
-
-        // Clear cart (don't update total_amount since it doesn't exist)
-        CartItem::where('cart_id', $cart->id)->delete();
-
-        return redirect()->route('customer.orders')->with('success', 'Order placed successfully!');
     }
+
+    CartItem::where('cart_id', $cart->id)->delete();
+
+    return redirect()->route('customer.orders')->with('success', 'Order placed successfully!');
+}
 
     /**
      * Profile page
@@ -371,24 +385,25 @@ class CustomerController extends Controller
     public function storeAddress(Request $request)
     {
         $request->validate([
-            'label' => 'required|string|max:50',
-            'address_line_1' => 'required|string',
-            'city' => 'required|string',
-            'state' => 'required|string',
-            'postal_code' => 'required|string',
-            'country' => 'required|string',
+            'recipient_name' => 'required|string|max:100',  // ✅ Add this
+        'phone' => 'required|string|max:20',            // ✅ Add this
+        'address_line' => 'required|string',            // ✅ Changed from address_line_1
+        'city' => 'required|string',
+        'state' => 'required|string',
+        'postal_code' => 'required|string',
+        'country' => 'required|string',
         ]);
 
         UserAddress::create([
             'user_id' => Auth::id(),
-            'label' => $request->label,
-            'address_line_1' => $request->address_line_1,
-            'address_line_2' => $request->address_line_2,
-            'city' => $request->city,
-            'state' => $request->state,
-            'postal_code' => $request->postal_code,
-            'country' => $request->country,
-            'is_default' => $request->is_default ?? false,
+        'recipient_name' => $request->recipient_name,   // ✅ Add this
+        'phone' => $request->phone,                     // ✅ Add this
+        'address_line' => $request->address_line,       // ✅ Changed from address_line_1
+        'city' => $request->city,
+        'state' => $request->state,
+        'postal_code' => $request->postal_code,
+        'country' => $request->country,
+        'is_default' => $request->is_default ?? false,
         ]);
 
         return redirect()->back()->with('success', 'Address added successfully!');
@@ -397,21 +412,64 @@ class CustomerController extends Controller
     /**
      * Store review
      */
-    public function storeReview(Request $request)
-    {
-        $request->validate([
-            'product_id' => 'required|exists:products,id',
-            'rating' => 'required|integer|min:1|max:5',
-            'comment' => 'required|string',
-        ]);
+    /**
+ * Store review
+ */
+public function storeReview(Request $request)
+{
+    $request->validate([
+        'product_id' => 'required|exists:products,id',
+        'rating' => 'required|integer|min:1|max:5',
+        'comment' => 'required|string|min:10',
+    ]);
 
-        Review::create([
-            'user_id' => Auth::id(),
-            'product_id' => $request->product_id,
-            'rating' => $request->rating,
-            'comment' => $request->comment,
-        ]);
+    $user = Auth::user();
 
-        return redirect()->back()->with('success', 'Review submitted successfully!');
+    // Check if user has already reviewed this product
+    $existingReview = Review::where('user_id', $user->id)
+        ->where('product_id', $request->product_id)
+        ->first();
+
+    if ($existingReview) {
+        return redirect()->back()->with('error', 'You have already reviewed this product!');
     }
+
+    // Optional: Check if user actually bought this product
+    $hasPurchased = Order::where('user_id', $user->id)
+        ->whereHas('items', function($query) use ($request) {
+            $query->where('product_id', $request->product_id);
+        })
+        ->where('status', 'delivered')
+        ->exists();
+
+    if (!$hasPurchased) {
+        return redirect()->back()->with('error', 'You can only review products you have purchased!');
+    }
+
+    // Create review
+    Review::create([
+        'user_id' => $user->id,
+        'product_id' => $request->product_id,
+        'rating' => $request->rating,
+        'order_id' => $request->order_id, //add this
+        'comment' => $request->comment,
+        'is_approved' => true, // Auto-approve or set to false for admin approval
+    ]);
+
+    // Update product rating (optional - calculate average)
+    $product = Product::find($request->product_id);
+    $avgRating = Review::where('product_id', $request->product_id)
+        ->where('is_approved', true)
+        ->avg('rating');
+    $reviewCount = Review::where('product_id', $request->product_id)
+        ->where('is_approved', true)
+        ->count();
+    
+    $product->update([
+        'avg_rating' => round($avgRating, 1),
+        'review_count' => $reviewCount,
+    ]);
+
+    return redirect()->back()->with('success', 'Thank you for your review!');
+}
 }
