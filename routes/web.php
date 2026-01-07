@@ -83,6 +83,9 @@ Route::middleware(['auth', \App\Http\Middleware\VendorMiddleware::class])->prefi
 Route::middleware(['auth', \App\Http\Middleware\AdminMiddleware::class])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
     Route::get('/users', [AdminController::class, 'users'])->name('users');
+        Route::post('/users/{id}/activate', [AdminController::class, 'activateUser'])->name('users.activate'); // ✅ ADD
+    Route::post('/users/{id}/suspend', [AdminController::class, 'suspendUser'])->name('users.suspend'); // ✅ ADD
+    Route::post('/users/{id}/ban', [AdminController::class, 'banUser'])->name('users.ban'); // ✅ ADD
     Route::get('/vendors', [AdminController::class, 'vendors'])->name('vendors');
     Route::post('/vendors/{id}/approve', [AdminController::class, 'approveVendor'])->name('vendors.approve');
         Route::post('/vendors/{id}/reject', [AdminController::class, 'rejectVendor'])->name('vendors.reject'); // ✅ ADD THIS

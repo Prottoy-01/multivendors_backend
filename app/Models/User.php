@@ -27,6 +27,7 @@ class User extends Authenticatable
         'email',
         'password',
         'phone',
+        'status', // ✅ ADD THIS
         'avatar',
         // 🔵 REQUIRED FOR AUTH
     'role',
@@ -80,5 +81,20 @@ public function orders()
 {
     return $this->hasMany(Order::class);
 }
+
+ public function isActive()
+    {
+        return $this->status === 'active';
+    }
+
+    public function isSuspended()
+    {
+        return $this->status === 'suspended';
+    }
+
+    public function isBanned()
+    {
+        return $this->status === 'banned';
+    }
 
 }

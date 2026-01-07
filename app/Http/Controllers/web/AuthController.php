@@ -38,12 +38,28 @@ class AuthController extends Controller
             
             $user = Auth::user();
             
+            // ✅ STEP 6: CHECK USER STATUS
+            if (isset($user->status) && $user->status === 'suspended') {
+                Auth::logout();
+                return back()->withErrors([
+                    'email' => 'Your account has been suspended. Please contact support for more information.',
+                ])->withInput();
+            }
+            
+            if (isset($user->status) && $user->status === 'banned') {
+                Auth::logout();
+                return back()->withErrors([
+                    'email' => 'Your account has been permanently banned. Please contact support.',
+                ])->withInput();
+            }
+            
             // Store user data in session for easy access
             Session::put('user', [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
                 'role' => $user->role,
+                'status' => $user->status ?? 'active', // ✅ Include status
             ]);
 
             // Redirect based on role
@@ -85,6 +101,7 @@ class AuthController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role' => 'customer',
+            'status' => 'active', // ✅ Set default status
         ]);
 
         // Auto login after registration
@@ -95,6 +112,7 @@ class AuthController extends Controller
             'name' => $user->name,
             'email' => $user->email,
             'role' => $user->role,
+            'status' => $user->status, // ✅ Include status
         ]);
 
         return redirect()->route('customer.dashboard')->with('success', 'Registration successful! Welcome!');
@@ -129,6 +147,7 @@ class AuthController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role' => 'vendor',
+            'status' => 'active', // ✅ Set default status
         ]);
 
         // Create vendor profile
@@ -138,8 +157,7 @@ class AuthController extends Controller
             'shop_description' => $request->shop_description,
             'phone' => $request->phone,
             'address' => $request->address,
-            //'is_approved' => false, // Needs admin approval
-            'status' => 'pending',
+            'status' => 'pending', // Vendor approval status
         ]);
 
         return redirect()->route('login')->with('success', 'Vendor registration successful! Please wait for admin approval before logging in.');

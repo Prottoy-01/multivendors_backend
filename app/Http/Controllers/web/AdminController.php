@@ -49,6 +49,71 @@ class AdminController extends Controller
         return view('admin.users', compact('users'));
     }
 
+
+    /**
+ * Activate user
+ */
+public function activateUser($id)
+{
+    $user = User::findOrFail($id);
+    
+    // Prevent admin from changing their own status
+    if ($user->id === auth()->id()) {
+        return redirect()->back()->with('error', 'You cannot change your own status!');
+    }
+    
+    $user->status = 'active';
+    $user->save();
+
+    return redirect()->back()->with('success', 'User activated successfully!');
+}
+
+/**
+ * Suspend user
+ */
+public function suspendUser($id)
+{
+    $user = User::findOrFail($id);
+    
+    // Prevent admin from changing their own status
+    if ($user->id === auth()->id()) {
+        return redirect()->back()->with('error', 'You cannot change your own status!');
+    }
+    
+    // Prevent suspending other admins
+    if ($user->role === 'admin') {
+        return redirect()->back()->with('error', 'You cannot suspend another admin!');
+    }
+    
+    $user->status = 'suspended';
+    $user->save();
+
+    return redirect()->back()->with('success', 'User suspended successfully!');
+}
+
+/**
+ * Ban user
+ */
+public function banUser($id)
+{
+    $user = User::findOrFail($id);
+    
+    // Prevent admin from changing their own status
+    if ($user->id === auth()->id()) {
+        return redirect()->back()->with('error', 'You cannot change your own status!');
+    }
+    
+    // Prevent banning other admins
+    if ($user->role === 'admin') {
+        return redirect()->back()->with('error', 'You cannot ban another admin!');
+    }
+    
+    $user->status = 'banned';
+    $user->save();
+
+    return redirect()->back()->with('success', 'User banned successfully!');
+}
+
     /**
      * Vendors list
      */
