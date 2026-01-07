@@ -87,6 +87,7 @@ Route::middleware(['auth', \App\Http\Middleware\AdminMiddleware::class])->prefix
     Route::post('/vendors/{id}/approve', [AdminController::class, 'approveVendor'])->name('vendors.approve');
         Route::post('/vendors/{id}/reject', [AdminController::class, 'rejectVendor'])->name('vendors.reject'); // ✅ ADD THIS
         Route::get('/vendors/{id}/details', [AdminController::class, 'vendorDetails'])->name('vendors.details'); // ✅ ADD THIS
+        Route::delete('/products/{id}', [AdminController::class, 'deleteProduct'])->name('products.delete'); // ✅ ADD THIS
     Route::get('/categories', [AdminController::class, 'categories'])->name('categories');
     Route::post('/categories', [AdminController::class, 'storeCategory'])->name('categories.store');
     Route::put('/categories/{id}', [AdminController::class, 'updateCategory'])->name('categories.update');

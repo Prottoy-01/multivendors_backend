@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web;
 
+use Illuminate\Support\Facades\Storage; // ✅ Add this at the top with other imports
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Vendor;
@@ -11,6 +12,7 @@ use App\Models\Product;
 use App\Models\Coupon;
 use Illuminate\Http\Request;
 use App\Models\OrderItem; 
+
 
 class AdminController extends Controller
 {
@@ -219,4 +221,24 @@ public function vendorDetails($id)
 
         return redirect()->back()->with('success', 'Coupon created successfully!');
     }
+
+    /**
+ * Delete product (Admin)
+ */
+public function deleteProduct($id)
+{
+    $product = Product::with('images')->findOrFail($id);
+    
+    // Delete all product images from storage
+    foreach ($product->images as $image) {
+        Storage::disk('public')->delete($image->image_path);
+        $image->delete();
+    }
+    
+    // Delete the product
+    $product->delete();
+    
+    return redirect()->route('products.index')
+        ->with('success', 'Product deleted successfully by admin!');
+}
 }
