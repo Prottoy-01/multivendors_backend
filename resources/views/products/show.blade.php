@@ -15,7 +15,7 @@
         </ol>
     </nav>
 
-    {{-- ✅ ADMIN DELETE BUTTON SECTION - ADD THIS --}}
+    {{-- ADMIN DELETE BUTTON SECTION --}}
     @if(Session::has('user') && Session::get('user')['role'] === 'admin')
         <div class="alert alert-warning d-flex justify-content-between align-items-center mb-4" role="alert">
             <div>
@@ -29,7 +29,7 @@
         </div>
     @endif
 
-    {{-- ✅ SUCCESS/ERROR MESSAGES - ADD THIS --}}
+    {{-- SUCCESS/ERROR MESSAGES --}}
     @if(session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">
             <i class="fas fa-check-circle"></i> {{ session('success') }}
@@ -136,18 +136,100 @@
                 <p>{{ $product['description'] }}</p>
             </div>
 
-            @if($product['stock'] > 0)
+            {{-- ✅✅✅ NEW: VARIANT SELECTOR SECTION ✅✅✅ --}}
+            @if($product['stock'] > 0 || ($hasVariants ?? false))
+                
+                {{-- Variant Selection Card --}}
+                @if(($hasVariants ?? false) && count($variantAttributes ?? []) > 0)
+                <div class="card mb-3 border-primary">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3">
+                            <i class="fas fa-sliders-h"></i> Select Options:
+                        </h5>
+                        
+                        @foreach($variantAttributes as $attributeName => $values)
+                        <div class="mb-3">
+                            <label class="form-label">
+                                <strong>{{ ucfirst($attributeName) }}:</strong>
+                                <span class="text-danger">*</span>
+                            </label>
+                            <div class="d-flex flex-wrap gap-2">
+                                @foreach($values as $value)
+                                <button type="button" 
+                                        class="btn btn-outline-primary variant-option" 
+                                        data-attribute="{{ $attributeName }}"
+                                        data-value="{{ $value }}"
+                                        onclick="selectVariantAttribute('{{ $attributeName }}', '{{ $value }}')">
+                                    @if($attributeName === 'color')
+                                        <i class="fas fa-circle me-1" style="color: {{ strtolower($value) }}"></i>
+                                    @endif
+                                    {{ ucfirst($value) }}
+                                </button>
+                                @endforeach
+                            </div>
+                        </div>
+                        @endforeach
+                        
+                        {{-- Selected Variant Info --}}
+                        <div id="variant-info" class="alert alert-success d-none mt-3">
+                            <div class="row">
+                                <div class="col-md-12 mb-2">
+                                    <strong><i class="fas fa-check-circle"></i> Selected:</strong> 
+                                    <span id="selected-variant-name" class="ms-2"></span>
+                                </div>
+                                <div class="col-md-4">
+                                    <strong>Price:</strong> 
+                                    <span id="variant-price" class="text-primary fs-5"></span>
+                                </div>
+                                <div class="col-md-4">
+                                    <strong>Stock:</strong> 
+                                    <span id="variant-stock" class="badge bg-success"></span>
+                                </div>
+                                <div class="col-md-4">
+                                    <strong>SKU:</strong> 
+                                    <span id="variant-sku" class="text-muted small"></span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {{-- Warning if no variant selected --}}
+                        <div id="variant-warning" class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i> 
+                            Please select all options above to continue
+                        </div>
+                        
+                        <input type="hidden" id="selected-variant-id" value="">
+                    </div>
+                </div>
+                @endif
+                
+                {{-- ✅✅✅ UPDATED: Add to Cart Section ✅✅✅ --}}
                 <div class="d-grid gap-2 mb-3">
                     @if(Auth::check() && Auth::user()->role === 'customer')
-                        <form action="{{ route('customer.cart.add') }}" method="POST">
+                        <form action="{{ route('customer.cart.add') }}" method="POST" id="add-to-cart-form">
                             @csrf
                             <input type="hidden" name="product_id" value="{{ $product['id'] }}">
+                            <input type="hidden" name="variant_id" id="cart-variant-id" value="">
                             <div class="input-group mb-3">
-                                <input type="number" class="form-control" name="quantity" value="1" min="1" max="{{ $product['stock'] }}">
-                                <button type="submit" class="btn btn-success btn-lg">
+                                <input type="number" 
+                                       class="form-control" 
+                                       name="quantity" 
+                                       id="quantity-input"
+                                       value="1" 
+                                       min="1" 
+                                       max="{{ ($hasVariants ?? false) ? '999' : $product['stock'] }}">
+                                <button type="submit" 
+                                        class="btn btn-success btn-lg" 
+                                        id="add-to-cart-btn"
+                                        {{ ($hasVariants ?? false) ? 'disabled' : '' }}>
                                     <i class="fas fa-cart-plus"></i> Add to Cart
                                 </button>
                             </div>
+                            @if($hasVariants ?? false)
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i> Please select all options to enable add to cart
+                            </small>
+                            @endif
                         </form>
                         
                         <button class="btn btn-outline-danger" onclick="toggleWishlist({{ $product['id'] }})">
@@ -308,7 +390,7 @@
     @endif
 </div>
 
-{{-- ✅ DELETE CONFIRMATION MODAL - ADD THIS AT THE END --}}
+{{-- DELETE CONFIRMATION MODAL --}}
 @if(Session::has('user') && Session::get('user')['role'] === 'admin')
 <div class="modal fade" id="deleteProductModal" tabindex="-1" aria-labelledby="deleteProductModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -356,8 +438,104 @@
 </div>
 @endif
 
+{{-- ✅✅✅ UPDATED: JavaScript with Variant Logic ✅✅✅ --}}
 @push('scripts')
 <script>
+// Product variants data
+const variants = @json($product['active_variants'] ?? []);
+const hasVariants = @json($hasVariants ?? false);
+const variantAttributes = @json($variantAttributes ?? []);
+
+// Track selected attributes
+let selectedAttributes = {};
+const requiredAttributes = Object.keys(variantAttributes);
+
+// Select variant attribute
+function selectVariantAttribute(attributeName, value) {
+    // Update selected attributes
+    selectedAttributes[attributeName] = value;
+    
+    // Update UI - highlight selected button
+    document.querySelectorAll(`.variant-option[data-attribute="${attributeName}"]`).forEach(btn => {
+        if (btn.dataset.value === value) {
+            btn.classList.remove('btn-outline-primary');
+            btn.classList.add('btn-primary');
+        } else {
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-outline-primary');
+        }
+    });
+    
+    // Check if all attributes are selected
+    updateVariantDisplay();
+}
+
+// Update variant display based on selection
+function updateVariantDisplay() {
+    // Check if all required attributes are selected
+    const allSelected = requiredAttributes.every(attr => selectedAttributes[attr]);
+    
+    if (!allSelected) {
+        // Hide variant info, show warning
+        document.getElementById('variant-info').classList.add('d-none');
+        document.getElementById('variant-warning').classList.remove('d-none');
+        document.getElementById('add-to-cart-btn').disabled = true;
+        return;
+    }
+    
+    // Find matching variant
+    const matchingVariant = variants.find(variant => {
+        return requiredAttributes.every(attr => {
+            return variant.attributes[attr] === selectedAttributes[attr];
+        });
+    });
+    
+    if (matchingVariant) {
+        // Show variant info
+        document.getElementById('variant-info').classList.remove('d-none');
+        document.getElementById('variant-warning').classList.add('d-none');
+        
+        // Update display
+        const variantName = Object.entries(selectedAttributes)
+            .map(([key, value]) => `${ucfirst(key)}: ${ucfirst(value)}`)
+            .join(' | ');
+        
+        document.getElementById('selected-variant-name').textContent = variantName;
+        document.getElementById('variant-price').textContent = '$' + parseFloat(matchingVariant.price).toFixed(2);
+        document.getElementById('variant-stock').textContent = matchingVariant.stock + ' available';
+        document.getElementById('variant-sku').textContent = matchingVariant.sku || 'N/A';
+        
+        // Update form
+        document.getElementById('selected-variant-id').value = matchingVariant.id;
+        document.getElementById('cart-variant-id').value = matchingVariant.id;
+        document.getElementById('quantity-input').max = matchingVariant.stock;
+        
+        // Enable add to cart button
+        document.getElementById('add-to-cart-btn').disabled = false;
+    } else {
+        // No matching variant found
+        document.getElementById('variant-info').classList.add('d-none');
+        document.getElementById('variant-warning').innerHTML = '<i class="fas fa-exclamation-triangle"></i> This combination is not available';
+        document.getElementById('variant-warning').classList.remove('d-none');
+        document.getElementById('add-to-cart-btn').disabled = true;
+    }
+}
+
+// Capitalize first letter
+function ucfirst(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+// Validate form submission
+document.getElementById('add-to-cart-form')?.addEventListener('submit', function(e) {
+    if (hasVariants && !document.getElementById('cart-variant-id').value) {
+        e.preventDefault();
+        alert('Please select all product options before adding to cart.');
+        return false;
+    }
+});
+
+// Wishlist function
 function toggleWishlist(productId) {
     fetch('{{ route('customer.wishlist.toggle') }}', {
         method: 'POST',

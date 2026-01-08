@@ -12,6 +12,7 @@ use App\Models\UserAddress;
 use App\Models\Review;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Models\ProductVariant; // ✅ ADD THIS
 
 class CustomerController extends Controller
 {
@@ -120,92 +121,182 @@ class CustomerController extends Controller
     public function cart()
     {
         $user = Auth::user();
-        
-        // Get or create cart (no total_amount column)
-        $cart = Cart::firstOrCreate(
-            ['user_id' => $user->id]
-        );
+    
+     // Get or create cart (no total_amount column)
+     $cart = Cart::firstOrCreate(
+        ['user_id' => $user->id]
+     );
 
-        // Get cart items with products
-        $cartItems = CartItem::where('cart_id', $cart->id)
-            ->with(['product.images', 'product.vendor'])
-            ->get();
+     // Get cart items with products AND variants (✅ UPDATED)
+     $cartItems = CartItem::where('cart_id', $cart->id)
+        ->with([
+            'product.images',
+            'product.vendor',
+            'variant' // ✅ ADD THIS LINE - loads variant data
+        ])
+        ->get()
+        ->map(function($item) { // ✅ ADD THIS MAPPING
+            // Add image URLs for display
+            $item->product->image_urls = $item->product->images->map(
+                fn($img) => asset('storage/' . $img->image_path)
+            );
+            return $item;
+        }); // ✅ END OF MAPPING
 
-        // Calculate totals using final_price (price after discount)
-        $subtotal = $cartItems->sum(function($item) {
-            return $item->quantity * $item->final_price;
-        });
+     // Calculate totals using final_price (price after discount)
+     $subtotal = $cartItems->sum(function($item) {
+        return $item->quantity * $item->final_price;
+    });
 
-        $cart = [
-            'id' => $cart->id,
-            'items' => $cartItems->toArray(),
-            'subtotal' => $subtotal,
-            'tax' => $subtotal * 0.1, // 10% tax
-            'total' => $subtotal + ($subtotal * 0.1),
-        ];
+    $cart = [
+        'id' => $cart->id,
+        'items' => $cartItems->toArray(),
+        'subtotal' => $subtotal,
+        'tax' => $subtotal * 0.1, // 10% tax
+        'total' => $subtotal + ($subtotal * 0.1),
+    ];
 
-        return view('customer.cart', compact('cart'));
+    return view('customer.cart', compact('cart'));
     }
 
     /**
      * Add to cart
      */
-    public function addToCart(Request $request)
-    {
-        $user = Auth::user();
-        
-        // Get or create cart (no total_amount column)
-        $cart = Cart::firstOrCreate(
-            ['user_id' => $user->id]
-        );
+   public function addToCart(Request $request)
+{
+    $request->validate([
+        'product_id' => 'required|exists:products,id',
+        'variant_id' => 'nullable|exists:product_variants,id',
+        'quantity' => 'nullable|integer|min:1',
+    ]);
 
-        // Get product
-        $product = Product::findOrFail($request->product_id);
-        
-        // Calculate final price (after discount if any)
-        $finalPrice = $product->final_price ?? $product->price;
-        
-        // Check if item already in cart
-        $cartItem = CartItem::where('cart_id', $cart->id)
+    $quantity = $request->quantity ?? 1;
+
+    $product = Product::findOrFail($request->product_id);
+    $variant = null;
+
+    if ($request->variant_id) {
+        $variant = ProductVariant::where('id', $request->variant_id)
             ->where('product_id', $product->id)
-            ->first();
+            ->firstOrFail();
 
-        if ($cartItem) {
-            // Update quantity
-            $cartItem->quantity += $request->quantity ?? 1;
-            $cartItem->save();
-        } else {
-            // Add new item - MUST include both price AND final_price
-            CartItem::create([
-                'cart_id' => $cart->id,
-                'product_id' => $product->id,
-                'quantity' => $request->quantity ?? 1,
-                'price' => $product->price,           // Original price
-                'final_price' => $finalPrice,         // Price after discount
-            ]);
+        if ($variant->stock < $quantity) {
+            return redirect()->back()->with('error', 'Insufficient stock for selected variant.');
         }
 
-        return redirect()->back()->with('success', 'Product added to cart!');
+        if (!$variant->is_active) {
+            return redirect()->back()->with('error', 'Selected variant is not available.');
+        }
+    } else {
+        if ($product->stock < $quantity) {
+            return redirect()->back()->with('error', 'Insufficient stock.');
+        }
     }
+
+    $price = $variant ? $variant->price : $product->price;
+    $finalPrice = $price;
+
+    if ($product->has_offer && $product->discount_value) {
+        if ($product->discount_type === 'percentage') {
+            $finalPrice = $price - ($price * $product->discount_value / 100);
+        } else {
+            $finalPrice = $price - $product->discount_value;
+        }
+    }
+
+    $cart = Cart::firstOrCreate(['user_id' => Auth::id()]);
+
+    $existingItem = CartItem::where('cart_id', $cart->id)
+        ->where('product_id', $product->id)
+        ->where('variant_id', $request->variant_id)
+        ->first();
+
+    if ($existingItem) {
+        // $existingItem->quantity += $quantity;
+        // $existingItem->save();
+
+        // return redirect()->back()->with('success', 'Cart updated!');
+        // Update quantity
+        $newQuantity = $existingItem->quantity + $request->quantity;
+        
+        // Check stock again
+        $maxStock = $variant ? $variant->stock : $product->stock;
+        if ($newQuantity > $maxStock) {
+            return redirect()->back()->with('error', 'Cannot add more. Maximum stock available: ' . $maxStock);
+        }
+        
+        $existingItem->quantity = $newQuantity;
+        $existingItem->save();
+        
+        return redirect()->back()->with('success', 'Cart updated! Quantity increased.');
+    }
+
+    CartItem::create([
+        'cart_id' => $cart->id,
+        'product_id' => $product->id,
+        'variant_id' => $request->variant_id,
+        'quantity' => $quantity,
+        'price' => $price,
+        'final_price' => $finalPrice,
+    ]);
+
+    return redirect()->back()->with('success', 'Product added to cart!');
+}
 
     /**
      * Update cart item
      */
-    public function updateCart(Request $request, $id)
-    {
-        $user = Auth::user();
-        $cart = Cart::where('user_id', $user->id)->firstOrFail();
+    // public function updateCart(Request $request, $id)
+    // {
+    //     $user = Auth::user();
+    //     $cart = Cart::where('user_id', $user->id)->firstOrFail();
         
-        $cartItem = CartItem::where('cart_id', $cart->id)
-            ->where('id', $id)
-            ->firstOrFail();
+    //     $cartItem = CartItem::where('cart_id', $cart->id)
+    //         ->where('id', $id)
+    //         ->firstOrFail();
 
-        $cartItem->quantity = $request->quantity;
-        $cartItem->save();
+    //     $cartItem->quantity = $request->quantity;
+    //     $cartItem->save();
 
-        return response()->json(['success' => true]);
+    //     return response()->json(['success' => true]);
+    // }
+    public function updateCart(Request $request, $id)
+{
+    $user = Auth::user();
+    $cart = Cart::where('user_id', $user->id)->firstOrFail();
+    
+    // ✅ Load cart item with variant relationship
+    $cartItem = CartItem::where('cart_id', $cart->id)
+        ->where('id', $id)
+        ->with('variant') // ✅ NEW: Load variant
+        ->firstOrFail();
+
+    $action = $request->action;
+    $newQuantity = $cartItem->quantity;
+
+    if ($action === 'increase') {
+        $newQuantity++;
+    } elseif ($action === 'decrease') {
+        $newQuantity = max(1, $newQuantity - 1);
+    } elseif ($request->has('quantity')) {
+        $newQuantity = max(1, (int)$request->quantity);
     }
 
+    // ✅ Check stock availability (variant or product)
+    $maxStock = $cartItem->variant ? $cartItem->variant->stock : $cartItem->product->stock;
+    
+    if ($newQuantity > $maxStock) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Cannot add more. Only ' . $maxStock . ' available in stock.'
+        ], 400);
+    }
+
+    $cartItem->quantity = $newQuantity;
+    $cartItem->save();
+
+    return response()->json(['success' => true]);
+}
     /**
      * Remove from cart
      */
@@ -258,10 +349,11 @@ class CustomerController extends Controller
         return view('customer.checkout', compact('cart', 'addresses'));
     }
 
-    /**
-     * Place order
-     */
-   public function placeOrder(Request $request)
+
+/**
+ * Place order with variant support
+ */
+public function placeOrder(Request $request)
 {
     $request->validate([
         'address_id' => 'required|exists:user_addresses,id',
@@ -270,10 +362,27 @@ class CustomerController extends Controller
 
     $user = Auth::user();
     $cart = Cart::where('user_id', $user->id)->firstOrFail();
-    $cartItems = CartItem::where('cart_id', $cart->id)->with('product')->get();
+    
+    // ✅ Load cart items with variant relationship
+    $cartItems = CartItem::where('cart_id', $cart->id)
+        ->with(['product', 'variant']) // ✅ ADD variant
+        ->get();
 
     if ($cartItems->isEmpty()) {
         return back()->with('error', 'Your cart is empty');
+    }
+
+    // ✅ Validate stock for each item (variant or product)
+    foreach ($cartItems as $item) {
+        $availableStock = $item->variant ? $item->variant->stock : $item->product->stock;
+        
+        if ($availableStock < $item->quantity) {
+            $itemName = $item->product->name;
+            if ($item->variant) {
+                $itemName .= ' (' . $item->variant->name . ')';
+            }
+            return back()->with('error', "Insufficient stock for {$itemName}. Only {$availableStock} available.");
+        }
     }
 
     $address = UserAddress::findOrFail($request->address_id);
@@ -305,7 +414,7 @@ class CustomerController extends Controller
             'coupon_discount' => $couponDiscount,
             'tax_amount' => $taxAmount,
             'shipping_cost' => $shippingCost,
-            'grand_total' => $grandTotal,         // ✅ REQUIRED
+            'grand_total' => $grandTotal,
             'status' => 'pending',
             'payment_method' => $request->payment_method,
             'payment_status' => 'unpaid',
@@ -318,21 +427,42 @@ class CustomerController extends Controller
             'country' => $address->country,
         ]);
 
-        // Create order items
+        // ✅ Create order items with variant support
         foreach ($vendorItems as $item) {
+            // ✅ Store variant details snapshot
+            $variantDetails = null;
+            if ($item->variant) {
+                $variantDetails = [
+                    'name' => $item->variant->name,
+                    'sku' => $item->variant->sku,
+                    'attributes' => $item->variant->attributes,
+                ];
+            }
+            
             $order->items()->create([
                 'product_id' => $item->product_id,
+                'variant_id' => $item->variant_id, // ✅ Store variant_id
+                'variant_details' => $variantDetails, // ✅ Store variant snapshot
                 'quantity' => $item->quantity,
                 'price' => $item->price,
                 'final_price' => $item->final_price,
             ]);
 
-            $product = $item->product;
-            $product->stock -= $item->quantity;
-            $product->save();
+            // ✅ Reduce stock (variant or product)
+            if ($item->variant) {
+                // Reduce variant stock
+                $item->variant->stock -= $item->quantity;
+                $item->variant->save();
+            } else {
+                // Reduce product stock
+                $product = $item->product;
+                $product->stock -= $item->quantity;
+                $product->save();
+            }
         }
     }
 
+    // Clear cart
     CartItem::where('cart_id', $cart->id)->delete();
 
     return redirect()->route('customer.orders')->with('success', 'Order placed successfully!');
@@ -369,7 +499,7 @@ class CustomerController extends Controller
         return redirect()->back()->with('success', 'Profile updated successfully!');
     }
 
-    /**
+    /*
      * Addresses page
      */
     public function addresses()

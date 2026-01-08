@@ -73,6 +73,10 @@ Route::middleware(['auth', \App\Http\Middleware\VendorMiddleware::class])->prefi
     Route::get('/analytics', [VendorController::class, 'analytics'])->name('analytics');
     Route::get('/profile', [VendorController::class, 'profile'])->name('profile');
     Route::post('/profile', [VendorController::class, 'updateProfile'])->name('profile.update');
+    // Variant management routes - ✅ ADD THESE
+    Route::post('/products/{product}/variants', [VendorController::class, 'storeVariant'])->name('products.variants.store');
+    Route::put('/products/{product}/variants/{variant}', [VendorController::class, 'updateVariant'])->name('products.variants.update');
+    Route::delete('/products/{product}/variants/{variant}', [VendorController::class, 'deleteVariant'])->name('products.variants.delete');
 });
 
 /*

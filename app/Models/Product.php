@@ -34,6 +34,76 @@ class Product extends Model
      */
     protected $appends = ['final_price', 'image_urls'];
 
+
+        /**
+     * Get all variants for this product
+     */
+    public function variants()
+    {
+        return $this->hasMany(ProductVariant::class);
+    }
+
+    /**
+     * Get active variants only
+     */
+    public function activeVariants()
+    {
+        return $this->hasMany(ProductVariant::class)->where('is_active', true)->where('stock', '>', 0);
+    }
+
+    /**
+     * Check if product has variants
+     */
+    public function hasVariants()
+    {
+        return $this->variants()->count() > 0;
+    }
+
+    /**
+     * Get available colors from variants
+     */
+    public function getAvailableColorsAttribute()
+    {
+        return $this->activeVariants()
+            ->get()
+            ->pluck('attributes.color')
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * Get available sizes from variants
+     */
+    public function getAvailableSizesAttribute()
+    {
+        return $this->activeVariants()
+            ->get()
+            ->pluck('attributes.size')
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * Get all unique attribute types from variants
+     */
+    public function getVariantAttributesAttribute()
+    {
+        $attributes = [];
+        foreach ($this->activeVariants as $variant) {
+            foreach ($variant->attributes as $key => $value) {
+                if (!isset($attributes[$key])) {
+                    $attributes[$key] = [];
+                }
+                if (!in_array($value, $attributes[$key])) {
+                    $attributes[$key][] = $value;
+                }
+            }
+        }
+        return $attributes;
+    }
+
     /**
      * Relationships
      */

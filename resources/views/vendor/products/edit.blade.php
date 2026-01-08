@@ -11,9 +11,24 @@
         </div>
     </div>
 
+    @if(session('success'))
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle"></i> {{ session('success') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    @endif
+
+    @if(session('error'))
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-circle"></i> {{ session('error') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    @endif
+
     <div class="row">
         <div class="col-md-8">
-            <div class="card">
+            {{-- Basic Product Information Card --}}
+            <div class="card mb-4">
                 <div class="card-header bg-warning text-dark">
                     <h5 class="mb-0">Product Information</h5>
                 </div>
@@ -41,18 +56,20 @@
 
                         <div class="row">
                             <div class="col-md-6 mb-3">
-                                <label for="price" class="form-label">Price ($) *</label>
+                                <label for="price" class="form-label">Base Price ($) *</label>
                                 <input type="number" class="form-control @error('price') is-invalid @enderror" 
                                        id="price" name="price" step="0.01" min="0" value="{{ old('price', $product['price']) }}" required>
+                                <small class="text-muted">Base price (overridden by variants if present)</small>
                                 @error('price')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
 
                             <div class="col-md-6 mb-3">
-                                <label for="stock" class="form-label">Stock Quantity *</label>
+                                <label for="stock" class="form-label">Base Stock *</label>
                                 <input type="number" class="form-control @error('stock') is-invalid @enderror" 
                                        id="stock" name="stock" min="0" value="{{ old('stock', $product['stock']) }}" required>
+                                <small class="text-muted">Total stock (if no variants)</small>
                                 @error('stock')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
@@ -158,9 +175,94 @@
                     </form>
                 </div>
             </div>
+
+            {{-- ✅✅✅ NEW: Product Variants Management Card ✅✅✅ --}}
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-palette"></i> Product Variants</h5>
+                    <button type="button" class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addVariantModal">
+                        <i class="fas fa-plus"></i> Add New Variant
+                    </button>
+                </div>
+                <div class="card-body">
+                    @php
+                        $variants = \App\Models\ProductVariant::where('product_id', $product['id'])->get();
+                    @endphp
+
+                    @if($variants->count() > 0)
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Attributes</th>
+                                        <th>SKU</th>
+                                        <th>Price</th>
+                                        <th>Stock</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($variants as $variant)
+                                    <tr>
+                                        <td><strong>{{ $variant->name }}</strong></td>
+                                        <td>
+                                            @foreach($variant->attributes as $key => $value)
+                                                <span class="badge bg-secondary">{{ ucfirst($key) }}: {{ ucfirst($value) }}</span>
+                                            @endforeach
+                                        </td>
+                                        <td><code>{{ $variant->sku ?? 'N/A' }}</code></td>
+                                        <td class="text-success fw-bold">${{ number_format($variant->price, 2) }}</td>
+                                        <td>
+                                            @if($variant->stock > 10)
+                                                <span class="badge bg-success">{{ $variant->stock }}</span>
+                                            @elseif($variant->stock > 0)
+                                                <span class="badge bg-warning">{{ $variant->stock }}</span>
+                                            @else
+                                                <span class="badge bg-danger">Out of Stock</span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            @if($variant->is_active)
+                                                <span class="badge bg-success">Active</span>
+                                            @else
+                                                <span class="badge bg-secondary">Inactive</span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <button type="button" class="btn btn-outline-primary" 
+                                                        onclick="editVariant({{ $variant->id }}, '{{ $variant->name }}', {{ $variant->price }}, {{ $variant->stock }}, {{ $variant->is_active ? 'true' : 'false' }})">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <form action="{{ route('vendor.products.variants.delete', [$product['id'], $variant->id]) }}" 
+                                                      method="POST" class="d-inline"
+                                                      onsubmit="return confirm('Are you sure you want to delete this variant?')">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="btn btn-outline-danger">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @else
+                        <div class="text-center py-4 text-muted">
+                            <i class="fas fa-box-open fa-3x mb-3"></i>
+                            <p>No variants yet. Click "Add New Variant" to create product variations.</p>
+                        </div>
+                    @endif
+                </div>
+            </div>
         </div>
 
-        <!-- Product Preview -->
+        <!-- Quick Actions Sidebar -->
         <div class="col-md-4">
             <div class="card">
                 <div class="card-header bg-info text-white">
@@ -201,6 +303,135 @@
     </div>
 </div>
 
+{{-- ✅✅✅ NEW: Add Variant Modal ✅✅✅ --}}
+<div class="modal fade" id="addVariantModal" tabindex="-1" aria-labelledby="addVariantModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="addVariantModalLabel">
+                    <i class="fas fa-plus-circle"></i> Add New Variant
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ route('vendor.products.variants.store', $product['id']) }}" method="POST">
+                @csrf
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Variant Name *</label>
+                            <input type="text" class="form-control" name="name" placeholder="e.g., Red - Large" required>
+                            <small class="text-muted">Display name for this variant</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">SKU</label>
+                            <input type="text" class="form-control" name="sku" placeholder="e.g., RED-L-001">
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Color</label>
+                            <input type="text" class="form-control" name="color" placeholder="e.g., Red">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Size</label>
+                            <select class="form-select" name="size">
+                                <option value="">None</option>
+                                <option value="xs">XS</option>
+                                <option value="s">S</option>
+                                <option value="m">M</option>
+                                <option value="l">L</option>
+                                <option value="xl">XL</option>
+                                <option value="xxl">XXL</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Other Attributes</label>
+                            <input type="text" class="form-control" name="other_attributes" placeholder="material:cotton">
+                            <small class="text-muted">Format: key:value</small>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Price ($) *</label>
+                            <input type="number" class="form-control" name="price" step="0.01" min="0" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Stock *</label>
+                            <input type="number" class="form-control" name="stock" min="0" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Status</label>
+                            <select class="form-select" name="is_active">
+                                <option value="1" selected>Active</option>
+                                <option value="0">Inactive</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-info">
+                        <i class="fas fa-save"></i> Add Variant
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{{-- ✅✅✅ NEW: Edit Variant Modal ✅✅✅ --}}
+<div class="modal fade" id="editVariantModal" tabindex="-1" aria-labelledby="editVariantModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="editVariantModalLabel">
+                    <i class="fas fa-edit"></i> Edit Variant
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="editVariantForm" method="POST">
+                @csrf
+                @method('PUT')
+                <div class="modal-body">
+                    <input type="hidden" id="edit-variant-id" name="variant_id">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Variant Name *</label>
+                        <input type="text" class="form-control" id="edit-variant-name" name="name" required>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Price ($) *</label>
+                            <input type="number" class="form-control" id="edit-variant-price" name="price" step="0.01" min="0" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Stock *</label>
+                            <input type="number" class="form-control" id="edit-variant-stock" name="stock" min="0" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" id="edit-variant-status" name="is_active">
+                            <option value="1">Active</option>
+                            <option value="0">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-save"></i> Update Variant
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 @push('scripts')
 <script>
 // Toggle offer fields
@@ -233,6 +464,23 @@ document.getElementById('images').addEventListener('change', function(e) {
         reader.readAsDataURL(file);
     }
 });
+
+// ✅ Edit variant function
+function editVariant(id, name, price, stock, isActive) {
+    document.getElementById('edit-variant-id').value = id;
+    document.getElementById('edit-variant-name').value = name;
+    document.getElementById('edit-variant-price').value = price;
+    document.getElementById('edit-variant-stock').value = stock;
+    document.getElementById('edit-variant-status').value = isActive ? '1' : '0';
+    
+    // Update form action
+    const form = document.getElementById('editVariantForm');
+    form.action = `{{ route('vendor.products.variants.update', [$product['id'], 'VARIANT_ID']) }}`.replace('VARIANT_ID', id);
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('editVariantModal'));
+    modal.show();
+}
 </script>
 @endpush
 @endsection

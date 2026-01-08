@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
+use App\Models\ProductVariant;
 
 class VendorController extends Controller
 {
@@ -64,16 +65,19 @@ class VendorController extends Controller
         $vendor = Vendor::where('user_id', Auth::id())->firstOrFail();
         
         $products = Product::where('vendor_id', $vendor->id)
-            ->with(['category', 'images'])
-            ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function($product) {
-                $product->image_urls = $product->images->map(fn($img) => asset('storage/' . $img->image_path));
-                return $product;
-            })
-            ->toArray();
+    ->with(['category', 'images'])
+    ->orderBy('created_at', 'desc')
+    ->get()
+    ->map(function($product) {
+        $product->image_urls = $product->images->map(fn($img) => asset('storage/' . $img->image_path));
+        return $product;
+    })
+    ->toArray();
 
-        return view('vendor.products.index', compact('products'));
+$categories = Category::orderBy('name')->get()->toArray();
+
+return view('vendor.products.index', compact('products', 'categories'));
+
     }
 
     /**
@@ -96,58 +100,158 @@ class VendorController extends Controller
     /**
      * Store new product
      */
-    public function storeProduct(Request $request)
-    {
-        $vendor = Vendor::where('user_id', Auth::id())->firstOrFail();
+    // public function storeProduct(Request $request)
+    // {
+    //     $vendor = Vendor::where('user_id', Auth::id())->firstOrFail();
         
-        // ✅ STEP 5: Check if vendor is approved
-        if ($vendor->status !== 'approved') {
-            return redirect()->route('vendor.dashboard')
-                ->with('error', 'Your vendor account must be approved before you can add products. Current status: ' . ucfirst($vendor->status));
-        }
+    //     // ✅ STEP 5: Check if vendor is approved
+    //     if ($vendor->status !== 'approved') {
+    //         return redirect()->route('vendor.dashboard')
+    //             ->with('error', 'Your vendor account must be approved before you can add products. Current status: ' . ucfirst($vendor->status));
+    //     }
 
-        $request->validate([
-            'name' => 'required|string|max:150',
-            'description' => 'required|string',
-            'price' => 'required|numeric|min:0',
-            'stock' => 'required|integer|min:0',
-            'category_id' => 'required|exists:categories,id',
-            'images.*' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'has_offer' => 'sometimes|boolean',
-            'discount_type' => 'nullable|in:percentage,fixed',
-            'discount_value' => 'nullable|numeric|min:0',
-            'offer_start' => 'nullable|date',
-            'offer_end' => 'nullable|date|after:offer_start',
-        ]);
+    //     $request->validate([
+    //         'name' => 'required|string|max:150',
+    //         'description' => 'required|string',
+    //         'price' => 'required|numeric|min:0',
+    //         'stock' => 'required|integer|min:0',
+    //         'category_id' => 'required|exists:categories,id',
+    //         'images.*' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+    //         'has_offer' => 'sometimes|boolean',
+    //         'discount_type' => 'nullable|in:percentage,fixed',
+    //         'discount_value' => 'nullable|numeric|min:0',
+    //         'offer_start' => 'nullable|date',
+    //         'offer_end' => 'nullable|date|after:offer_start',
+    //     ]);
 
-        $product = Product::create([
-            'vendor_id' => $vendor->id,
-            'category_id' => $request->category_id,
-            'name' => $request->name,
-            'description' => $request->description,
-            'price' => $request->price,
-            'stock' => $request->stock,
-            'has_offer' => $request->has_offer ?? false,
-            'discount_type' => $request->discount_type,
-            'discount_value' => $request->discount_value,
-            'offer_start' => $request->offer_start,
-            'offer_end' => $request->offer_end,
-        ]);
+    //     $product = Product::create([
+    //         'vendor_id' => $vendor->id,
+    //         'category_id' => $request->category_id,
+    //         'name' => $request->name,
+    //         'description' => $request->description,
+    //         'price' => $request->price,
+    //         'stock' => $request->stock,
+    //         'has_offer' => $request->has_offer ?? false,
+    //         'discount_type' => $request->discount_type,
+    //         'discount_value' => $request->discount_value,
+    //         'offer_start' => $request->offer_start,
+    //         'offer_end' => $request->offer_end,
+    //     ]);
 
-        // Save multiple images
-        if ($request->hasFile('images')) {
-            foreach ($request->file('images') as $key => $file) {
-                $path = $file->store('products', 'public');
-                $product->images()->create([
-                    'image_path' => $path,
-                    'is_main' => $key === 0
-                ]);
-            }
-        }
+    //     // Save multiple images
+    //     if ($request->hasFile('images')) {
+    //         foreach ($request->file('images') as $key => $file) {
+    //             $path = $file->store('products', 'public');
+    //             $product->images()->create([
+    //                 'image_path' => $path,
+    //                 'is_main' => $key === 0
+    //             ]);
+    //         }
+    //     }
 
-        return redirect()->route('vendor.products.index')->with('success', 'Product created successfully!');
+    //     return redirect()->route('vendor.products.index')->with('success', 'Product created successfully!');
+    // }
+    /**
+ * Store new product
+ */
+public function storeProduct(Request $request)
+{
+    $vendor = Vendor::where('user_id', Auth::id())->firstOrFail();
+    
+    // ✅ Check if vendor is approved
+    if ($vendor->status !== 'approved') {
+        return redirect()->route('vendor.dashboard')
+            ->with('error', 'Your vendor account must be approved before you can add products. Current status: ' . ucfirst($vendor->status));
     }
 
+    $request->validate([
+        'name' => 'required|string|max:150',
+        'description' => 'required|string',
+        'price' => 'required|numeric|min:0',
+        'stock' => 'required|integer|min:0',
+        'category_id' => 'required|exists:categories,id',
+        'images.*' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+        'has_offer' => 'sometimes|boolean',
+        'discount_type' => 'nullable|in:percentage,fixed',
+        'discount_value' => 'nullable|numeric|min:0',
+        'offer_start' => 'nullable|date',
+        'offer_end' => 'nullable|date|after:offer_start',
+        
+        // Variant validation
+        'variants' => 'nullable|array',
+        'variants.*.name' => 'required_with:variants|string|max:100',
+        'variants.*.price' => 'required_with:variants|numeric|min:0',
+        'variants.*.stock' => 'required_with:variants|integer|min:0',
+        'variants.*.sku' => 'nullable|string|max:50',
+    ]);
+
+    // Create product
+    $product = Product::create([
+        'vendor_id' => $vendor->id,
+        'category_id' => $request->category_id,
+        'name' => $request->name,
+        'description' => $request->description,
+        'price' => $request->price,
+        'stock' => $request->stock,
+        'has_offer' => $request->has_offer ?? false,
+        'discount_type' => $request->discount_type,
+        'discount_value' => $request->discount_value,
+        'offer_start' => $request->offer_start,
+        'offer_end' => $request->offer_end,
+    ]);
+
+    // Save multiple images
+    if ($request->hasFile('images')) {
+        foreach ($request->file('images') as $key => $file) {
+            $path = $file->store('products', 'public');
+            $product->images()->create([
+                'image_path' => $path,
+                'is_main' => $key === 0
+            ]);
+        }
+    }
+
+    // ✅ Create variants if provided
+    if ($request->has('variants') && is_array($request->variants)) {
+        foreach ($request->variants as $variantData) {
+            // Build attributes array
+            $attributes = [];
+            
+            if (!empty($variantData['color'])) {
+                $attributes['color'] = $variantData['color'];
+            }
+            
+            if (!empty($variantData['size'])) {
+                $attributes['size'] = $variantData['size'];
+            }
+            
+            // Parse other attributes (format: key:value,key:value)
+            if (!empty($variantData['other_attributes'])) {
+                $otherAttrs = explode(',', $variantData['other_attributes']);
+                foreach ($otherAttrs as $attr) {
+                    if (strpos($attr, ':') !== false) {
+                        list($key, $value) = explode(':', $attr, 2);
+                        $attributes[trim($key)] = trim($value);
+                    }
+                }
+            }
+            
+            // Create variant
+            ProductVariant::create([
+                'product_id' => $product->id,
+                'sku' => $variantData['sku'] ?? null,
+                'name' => $variantData['name'],
+                'attributes' => $attributes,
+                'price' => $variantData['price'],
+                'stock' => $variantData['stock'],
+                'is_active' => true,
+            ]);
+        }
+    }
+
+    return redirect()->route('vendor.products.index')
+        ->with('success', 'Product created successfully!' . ($request->has('variants') ? ' With ' . count($request->variants) . ' variants.' : ''));
+}
     /**
      * Show edit product form
      */
@@ -377,4 +481,87 @@ class VendorController extends Controller
 
         return view('vendor.analytics', compact('analytics'));
     }
+
+
+    /**
+ * Store new variant
+ */
+public function storeVariant(Request $request, $productId)
+{
+    $vendor = Vendor::where('user_id', Auth::id())->firstOrFail();
+    $product = Product::where('vendor_id', $vendor->id)->findOrFail($productId);
+    
+    $request->validate([
+        'name' => 'required|string|max:100',
+        'price' => 'required|numeric|min:0',
+        'stock' => 'required|integer|min:0',
+        'sku' => 'nullable|string|max:50|unique:product_variants,sku',
+    ]);
+    
+    // Build attributes
+    $attributes = [];
+    if ($request->color) $attributes['color'] = $request->color;
+    if ($request->size) $attributes['size'] = $request->size;
+    
+    // Parse other attributes
+    if ($request->other_attributes) {
+        $otherAttrs = explode(',', $request->other_attributes);
+        foreach ($otherAttrs as $attr) {
+            if (strpos($attr, ':') !== false) {
+                list($key, $value) = explode(':', $attr, 2);
+                $attributes[trim($key)] = trim($value);
+            }
+        }
+    }
+    
+    ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => $request->sku,
+        'name' => $request->name,
+        'attributes' => $attributes,
+        'price' => $request->price,
+        'stock' => $request->stock,
+        'is_active' => true,
+    ]);
+    
+    return redirect()->back()->with('success', 'Variant added successfully!');
+}
+
+/**
+ * Update variant
+ */
+public function updateVariant(Request $request, $productId, $variantId)
+{
+    $vendor = Vendor::where('user_id', Auth::id())->firstOrFail();
+    $product = Product::where('vendor_id', $vendor->id)->findOrFail($productId);
+    $variant = ProductVariant::where('product_id', $product->id)->findOrFail($variantId);
+    
+    $request->validate([
+        'name' => 'required|string|max:100',
+        'price' => 'required|numeric|min:0',
+        'stock' => 'required|integer|min:0',
+    ]);
+    
+    $variant->update([
+        'name' => $request->name,
+        'price' => $request->price,
+        'stock' => $request->stock,
+    ]);
+    
+    return redirect()->back()->with('success', 'Variant updated successfully!');
+}
+
+/**
+ * Delete variant
+ */
+public function deleteVariant($productId, $variantId)
+{
+    $vendor = Vendor::where('user_id', Auth::id())->firstOrFail();
+    $product = Product::where('vendor_id', $vendor->id)->findOrFail($productId);
+    $variant = ProductVariant::where('product_id', $product->id)->findOrFail($variantId);
+    
+    $variant->delete();
+    
+    return redirect()->back()->with('success', 'Variant deleted successfully!');
+}
 }
