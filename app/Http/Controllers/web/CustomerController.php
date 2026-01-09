@@ -12,7 +12,7 @@ use App\Models\UserAddress;
 use App\Models\Review;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Models\ProductVariant; // ✅ ADD THIS
+use App\Models\ProductVariant; //  ADD THIS
 use App\Models\Coupon;//new
 use App\Models\CouponUsage;//new
 
@@ -129,21 +129,21 @@ class CustomerController extends Controller
         ['user_id' => $user->id]
      );
 
-     // Get cart items with products AND variants (✅ UPDATED)
+     // Get cart items with products AND variants ( UPDATED)
      $cartItems = CartItem::where('cart_id', $cart->id)
         ->with([
             'product.images',
             'product.vendor',
-            'variant' // ✅ ADD THIS LINE - loads variant data
+            'variant' //  ADD THIS LINE - loads variant data
         ])
         ->get()
-        ->map(function($item) { // ✅ ADD THIS MAPPING
+        ->map(function($item) { //  ADD THIS MAPPING
             // Add image URLs for display
             $item->product->image_urls = $item->product->images->map(
                 fn($img) => asset('storage/' . $img->image_path)
             );
             return $item;
-        }); // ✅ END OF MAPPING
+        }); //  END OF MAPPING
 
      // Calculate totals using final_price (price after discount)
      $subtotal = $cartItems->sum(function($item) {
@@ -267,10 +267,10 @@ class CustomerController extends Controller
     $user = Auth::user();
     $cart = Cart::where('user_id', $user->id)->firstOrFail();
     
-    // ✅ Load cart item with variant relationship
+    //  Load cart item with variant relationship
     $cartItem = CartItem::where('cart_id', $cart->id)
         ->where('id', $id)
-        ->with('variant') // ✅ NEW: Load variant
+        ->with('variant') //  NEW: Load variant
         ->firstOrFail();
 
     $action = $request->action;
@@ -284,7 +284,7 @@ class CustomerController extends Controller
         $newQuantity = max(1, (int)$request->quantity);
     }
 
-    // ✅ Check stock availability (variant or product)
+    // Check stock availability (variant or product)
     $maxStock = $cartItem->variant ? $cartItem->variant->stock : $cartItem->product->stock;
     
     if ($newQuantity > $maxStock) {
@@ -455,11 +455,11 @@ public function removeCoupon()
         return $item->quantity * $item->final_price;
     });
     
-    // ✅ Get applied coupon from session
+    //  Get applied coupon from session
     $appliedCoupon = session('applied_coupon');
     $couponDiscount = 0;
     
-    // ✅ Validate coupon is still valid if applied
+    //  Validate coupon is still valid if applied
     if ($appliedCoupon) {
         $coupon = Coupon::find($appliedCoupon['id']);
         if (!$coupon || !$coupon->isValid()) {
@@ -489,7 +489,7 @@ public function removeCoupon()
         'id' => $cart->id,
         'items' => $cartItems->toArray(),
         'subtotal' => $subtotal,
-        'coupon_discount' => $couponDiscount,  // ✅ ADD
+        'coupon_discount' => $couponDiscount,  //  ADD
         'tax' => $tax,
         'total' => $total,
     ];
@@ -549,7 +549,7 @@ public function placeOrder(Request $request)
             return $item->quantity * $item->final_price;
         });
         
-        // ✅ Get applied coupon from session
+        //  Get applied coupon from session
         $appliedCoupon = session('applied_coupon');
         $coupon = null;
         $couponDiscount = 0;
@@ -622,7 +622,7 @@ public function placeOrder(Request $request)
             }
         }
         
-        // ✅ Record coupon usage
+        //  Record coupon usage
         if ($coupon) {
             CouponUsage::create([
                 'coupon_id' => $coupon->id,
@@ -638,7 +638,7 @@ public function placeOrder(Request $request)
     // Clear cart
     CartItem::where('cart_id', $cart->id)->delete();
     
-    // ✅ Clear applied coupon from session
+    //  Clear applied coupon from session
     session()->forget('applied_coupon');
 
     return redirect()->route('customer.orders')->with('success', 'Order placed successfully!');
@@ -692,9 +692,9 @@ public function placeOrder(Request $request)
     public function storeAddress(Request $request)
     {
         $request->validate([
-            'recipient_name' => 'required|string|max:100',  // ✅ Add this
-        'phone' => 'required|string|max:20',            // ✅ Add this
-        'address_line' => 'required|string',            // ✅ Changed from address_line_1
+            'recipient_name' => 'required|string|max:100',  //  Add this
+        'phone' => 'required|string|max:20',            //  Add this
+        'address_line' => 'required|string',            //  Changed from address_line_1
         'city' => 'required|string',
         'state' => 'required|string',
         'postal_code' => 'required|string',
@@ -703,9 +703,9 @@ public function placeOrder(Request $request)
 
         UserAddress::create([
             'user_id' => Auth::id(),
-        'recipient_name' => $request->recipient_name,   // ✅ Add this
-        'phone' => $request->phone,                     // ✅ Add this
-        'address_line' => $request->address_line,       // ✅ Changed from address_line_1
+        'recipient_name' => $request->recipient_name,   //  Add this
+        'phone' => $request->phone,                     //  Add this
+        'address_line' => $request->address_line,       //  Changed from address_line_1
         'city' => $request->city,
         'state' => $request->state,
         'postal_code' => $request->postal_code,

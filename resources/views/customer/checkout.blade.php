@@ -11,8 +11,23 @@
         </div>
     </div>
 
-    <form action="{{ route('customer.checkout.place') }}" method="POST">
+    {{-- ✅ COD Form (Original) --}}
+    <form id="cod-form" action="{{ route('customer.checkout.place') }}" method="POST" style="display: none;">
         @csrf
+        <input type="hidden" name="address_id" id="cod-address-id">
+        <input type="hidden" name="payment_method" value="cash_on_delivery">
+        <input type="hidden" name="notes" id="cod-notes">
+    </form>
+
+    {{-- ✅ Stripe Checkout Form (New) --}}
+    <form id="stripe-form" action="{{ route('payment.stripe.checkout') }}" method="POST" style="display: none;">
+        @csrf
+        <input type="hidden" name="address_id" id="stripe-address-id">
+        <input type="hidden" name="notes" id="stripe-notes">
+    </form>
+
+    {{-- ✅ Main Form (UI Only) --}}
+    <form id="checkout-form">
         <div class="row">
             <!-- Shipping & Payment -->
             <div class="col-md-8">
@@ -94,7 +109,7 @@
                                     <div>
                                         <strong>Credit/Debit Card</strong>
                                         <br>
-                                        <small class="text-muted">Visa, MasterCard, American Express</small>
+                                        <small class="text-muted">Visa, Mastercard, American Express - Powered by Stripe</small>
                                     </div>
                                 </div>
                             </label>
@@ -117,7 +132,7 @@
                     </div>
                 </div>
 
-                {{-- ✅✅✅ NEW: Coupon Code Section ✅✅✅ --}}
+                {{-- ✅✅✅ YOUR COUPON CODE SECTION (PRESERVED) ✅✅✅ --}}
                 <div class="card mb-3">
                     <div class="card-header bg-warning text-dark">
                         <h5 class="mb-0"><i class="fas fa-ticket-alt"></i> Have a Coupon Code?</h5>
@@ -191,7 +206,7 @@
                         </div>
                     </div>
                 </div>
-                {{-- ✅✅✅ END: Coupon Code Section ✅✅✅ --}}
+                {{-- ✅✅✅ END: YOUR COUPON CODE SECTION ✅✅✅ --}}
 
                 <!-- Order Notes -->
                 <div class="card">
@@ -199,7 +214,7 @@
                         <h5 class="mb-0"><i class="fas fa-sticky-note"></i> Order Notes (Optional)</h5>
                     </div>
                     <div class="card-body">
-                        <textarea class="form-control" name="notes" rows="3" 
+                        <textarea class="form-control" name="notes" id="order-notes" rows="3" 
                                   placeholder="Any special instructions for your order..."></textarea>
                     </div>
                 </div>
@@ -234,7 +249,7 @@
                         
                         <hr>
                         
-                        {{-- ✅✅✅ UPDATED: Order Summary with Coupon Discount ✅✅✅ --}}
+                        {{-- ✅✅✅ YOUR ORDER SUMMARY (PRESERVED) ✅✅✅ --}}
                         <div class="d-flex justify-content-between mb-2">
                             <span>Subtotal:</span>
                             <strong id="subtotal-amount">${{ number_format($cart['subtotal'], 2) }}</strong>
@@ -262,11 +277,11 @@
                             <strong class="fs-5">Total:</strong>
                             <h4 class="text-success mb-0" id="total-amount">${{ number_format($cart['total'], 2) }}</h4>
                         </div>
-                        {{-- ✅✅✅ END: Updated Order Summary ✅✅✅ --}}
+                        {{-- ✅✅✅ END: YOUR ORDER SUMMARY ✅✅✅ --}}
                         
                         <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-success btn-lg">
-                                <i class="fas fa-check-circle"></i> Place Order
+                            <button type="button" id="place-order-btn" class="btn btn-success btn-lg">
+                                <i class="fas fa-check-circle"></i> <span id="btn-text">Place Order</span>
                             </button>
                             <a href="{{ route('customer.cart') }}" class="btn btn-outline-secondary">
                                 <i class="fas fa-arrow-left"></i> Back to Cart
@@ -285,9 +300,11 @@
     </form>
 </div>
 
-{{-- ✅✅✅ NEW: JavaScript for Coupon Apply/Remove ✅✅✅ --}}
-@push('scripts')
+{{-- ✅✅✅ COMBINED JAVASCRIPT: YOUR COUPON CODE + STRIPE PAYMENT ✅✅✅ --}}
 <script>
+// ==========================================
+// YOUR ORIGINAL COUPON FUNCTIONS (PRESERVED)
+// ==========================================
 function applyCoupon() {
     const couponCode = document.getElementById('coupon-code-input').value.trim();
     const messageDiv = document.getElementById('coupon-message');
@@ -359,6 +376,52 @@ document.getElementById('coupon-code-input')?.addEventListener('keypress', funct
         applyCoupon();
     }
 });
+
+// ==========================================
+// NEW: STRIPE PAYMENT INTEGRATION
+// ==========================================
+
+// Update button text based on payment method
+document.querySelectorAll('input[name="payment_method"]').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+        const btnText = document.getElementById('btn-text');
+        
+        if (this.value === 'card') {
+            btnText.textContent = 'Pay with Card';
+        } else {
+            btnText.textContent = 'Place Order';
+        }
+    });
+});
+
+// Handle Place Order button click
+document.getElementById('place-order-btn').addEventListener('click', function() {
+    const selectedPaymentMethod = document.querySelector('input[name="payment_method"]:checked').value;
+    const addressId = document.querySelector('input[name="address_id"]:checked')?.value;
+    const notes = document.getElementById('order-notes').value;
+    
+    if (!addressId) {
+        alert('Please select a shipping address');
+        return;
+    }
+    
+    // Disable button during processing
+    this.disabled = true;
+    const originalText = this.innerHTML;
+    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+    
+    if (selectedPaymentMethod === 'card') {
+        // Stripe Checkout - Redirect
+        document.getElementById('stripe-address-id').value = addressId;
+        document.getElementById('stripe-notes').value = notes;
+        document.getElementById('stripe-form').submit();
+        
+    } else {
+        // Cash on Delivery - Normal submission
+        document.getElementById('cod-address-id').value = addressId;
+        document.getElementById('cod-notes').value = notes;
+        document.getElementById('cod-form').submit();
+    }
+});
 </script>
-@endpush
 @endsection
