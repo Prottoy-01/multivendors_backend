@@ -327,7 +327,8 @@ class CustomerController extends Controller
     $couponCode = strtoupper(trim($request->coupon_code));
     
     // Find coupon
-    $coupon = Coupon::where('code', $couponCode)->first();
+   // $coupon = Coupon::where('code', $couponCode)->first();
+   $coupon = Coupon::whereRaw('UPPER(code) = ?', [$couponCode])->first();
     
     if (!$coupon) {
         return response()->json([

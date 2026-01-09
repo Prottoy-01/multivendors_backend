@@ -37,9 +37,9 @@
                             <input type="number" class="form-control" name="value" step="0.01" required>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Min Order Amount</label>
-                            <input type="number" class="form-control" name="min_order_amount" step="0.01">
-                        </div>
+    <label class="form-label">Min Purchase Amount</label>
+    <input type="number" class="form-control" name="min_purchase" step="0.01">
+</div>
                         <div class="mb-3">
                             <label class="form-label">Max Discount</label>
                             <input type="number" class="form-control" name="max_discount" step="0.01">
@@ -48,6 +48,11 @@
                             <label class="form-label">Usage Limit</label>
                             <input type="number" class="form-control" name="usage_limit">
                         </div>
+                        <div class="mb-3">
+    <label class="form-label">Per User Limit</label>
+    <input type="number" class="form-control" name="per_user_limit" value="5" min="1">
+    <small class="text-muted">How many times each customer can use this coupon</small>
+</div>
                         <div class="mb-3">
                             <label class="form-label">Valid From *</label>
                             <input type="date" class="form-control" name="valid_from" required>

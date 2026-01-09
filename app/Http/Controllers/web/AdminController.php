@@ -275,9 +275,10 @@ public function vendorDetails($id)
             'code' => 'required|string|unique:coupons|max:50',
             'type' => 'required|in:percentage,fixed',
             'value' => 'required|numeric|min:0',
-            'min_order_amount' => 'nullable|numeric|min:0',
+            'min_purchase' => 'nullable|numeric|min:0',
             'max_discount' => 'nullable|numeric|min:0',
             'usage_limit' => 'nullable|integer|min:1',
+            'per_user_limit' => 'nullable|integer|min:1', // ✅✅✅ ADD THIS LINE ✅✅✅
             'valid_from' => 'required|date',
             'valid_until' => 'required|date|after:valid_from',
         ]);
@@ -287,7 +288,10 @@ public function vendorDetails($id)
     $data['code'] = strtoupper($request->code);
     // ✅✅✅ END FIX ✅✅✅
     
-
+// ✅ ADD THIS: Ensure per_user_limit has a value
+if (!isset($data['per_user_limit']) || $data['per_user_limit'] < 1) {
+    $data['per_user_limit'] = 5; // Default: 5 uses per customer
+}
 
 
 
