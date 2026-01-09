@@ -13,6 +13,8 @@ use App\Models\Review;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\ProductVariant; // ✅ ADD THIS
+use App\Models\Coupon;//new
+use App\Models\CouponUsage;//new
 
 class CustomerController extends Controller
 {
@@ -314,40 +316,188 @@ class CustomerController extends Controller
         return redirect()->back()->with('success', 'Item removed from cart');
     }
 
+  // apply copun
+    public function applyCoupon(Request $request)
+{
+    $request->validate([
+        'coupon_code' => 'required|string',
+    ]);
+
+    $user = Auth::user();
+    $couponCode = strtoupper(trim($request->coupon_code));
+    
+    // Find coupon
+    $coupon = Coupon::where('code', $couponCode)->first();
+    
+    if (!$coupon) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Invalid coupon code.'
+        ], 422);
+    }
+    
+    // Check if coupon is valid
+    if (!$coupon->isValid()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'This coupon is no longer valid or has expired.'
+        ], 422);
+    }
+    
+    // Check if user can use this coupon
+    if (!$coupon->canBeUsedBy($user->id)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'You have already used this coupon the maximum number of times.'
+        ], 422);
+    }
+    
+    // Get cart to calculate discount
+    $cart = Cart::where('user_id', $user->id)->first();
+    if (!$cart) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Your cart is empty.'
+        ], 422);
+    }
+    
+    $cartItems = CartItem::where('cart_id', $cart->id)
+        ->with('product')
+        ->get();
+    
+    if ($cartItems->isEmpty()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Your cart is empty.'
+        ], 422);
+    }
+    
+    // Calculate subtotal
+    $subtotal = $cartItems->sum(function($item) {
+        return $item->quantity * $item->final_price;
+    });
+    
+    // Calculate discount
+    $discount = $coupon->calculateDiscount($subtotal);
+    
+    if ($discount == 0) {
+        $minPurchase = $coupon->min_purchase ? '$' . number_format($coupon->min_purchase, 2) : '';
+        return response()->json([
+            'success' => false,
+            'message' => $minPurchase ? "Minimum purchase of {$minPurchase} required to use this coupon." : 'This coupon cannot be applied to your cart.'
+        ], 422);
+    }
+    
+    // Store coupon in session
+    session([
+        'applied_coupon' => [
+            'id' => $coupon->id,
+            'code' => $coupon->code,
+            'type' => $coupon->type,
+            'discount' => $discount,
+        ]
+    ]);
+    
+    // Calculate new totals
+    $tax = $subtotal * 0.10;
+    $total = $subtotal - $discount + $tax;
+    
+    return response()->json([
+        'success' => true,
+        'message' => 'Coupon applied successfully!',
+        'coupon' => [
+            'code' => $coupon->code,
+            'discount' => $discount,
+        ],
+        'totals' => [
+            'subtotal' => $subtotal,
+            'discount' => $discount,
+            'tax' => $tax,
+            'total' => $total,
+        ]
+    ]);
+}
+
+/**
+ * Remove applied coupon
+ */
+public function removeCoupon()
+{
+    session()->forget('applied_coupon');
+    
+    return response()->json([
+        'success' => true,
+        'message' => 'Coupon removed.'
+    ]);
+}
+
+
     /**
      * Checkout page
      */
-    public function checkout()
-    {
-        $user = Auth::user();
-        
-        $cart = Cart::where('user_id', $user->id)->first();
-        
-        if (!$cart || CartItem::where('cart_id', $cart->id)->count() == 0) {
-            return redirect()->route('customer.cart')->with('error', 'Your cart is empty');
-        }
-
-        $cartItems = CartItem::where('cart_id', $cart->id)
-            ->with(['product.images', 'product.vendor'])
-            ->get();
-
-        // Calculate totals using final_price
-        $subtotal = $cartItems->sum(function($item) {
-            return $item->quantity * $item->final_price;
-        });
-
-        $cart = [
-            'id' => $cart->id,
-            'items' => $cartItems->toArray(),
-            'subtotal' => $subtotal,
-            'tax' => $subtotal * 0.1,
-            'total' => $subtotal + ($subtotal * 0.1),
-        ];
-
-        $addresses = UserAddress::where('user_id', $user->id)->get()->toArray();
-
-        return view('customer.checkout', compact('cart', 'addresses'));
+   public function checkout()
+{
+    $user = Auth::user();
+    
+    $cart = Cart::where('user_id', $user->id)->first();
+    
+    if (!$cart || CartItem::where('cart_id', $cart->id)->count() == 0) {
+        return redirect()->route('customer.cart')->with('error', 'Your cart is empty');
     }
+
+    $cartItems = CartItem::where('cart_id', $cart->id)
+        ->with(['product.images', 'product.vendor', 'variant'])
+        ->get();
+
+    // Calculate subtotal
+    $subtotal = $cartItems->sum(function($item) {
+        return $item->quantity * $item->final_price;
+    });
+    
+    // ✅ Get applied coupon from session
+    $appliedCoupon = session('applied_coupon');
+    $couponDiscount = 0;
+    
+    // ✅ Validate coupon is still valid if applied
+    if ($appliedCoupon) {
+        $coupon = Coupon::find($appliedCoupon['id']);
+        if (!$coupon || !$coupon->isValid()) {
+            // Coupon expired or no longer valid
+            session()->forget('applied_coupon');
+            $appliedCoupon = null;
+        } else {
+            // Recalculate discount based on current subtotal
+            $couponDiscount = $coupon->calculateDiscount($subtotal);
+            
+            // Update session with recalculated discount
+            if ($couponDiscount > 0) {
+                session(['applied_coupon.discount' => $couponDiscount]);
+                $appliedCoupon['discount'] = $couponDiscount;
+            } else {
+                // Minimum purchase no longer met
+                session()->forget('applied_coupon');
+                $appliedCoupon = null;
+            }
+        }
+    }
+
+    $tax = $subtotal * 0.1;
+    $total = $subtotal - $couponDiscount + $tax;
+
+    $cart = [
+        'id' => $cart->id,
+        'items' => $cartItems->toArray(),
+        'subtotal' => $subtotal,
+        'coupon_discount' => $couponDiscount,  // ✅ ADD
+        'tax' => $tax,
+        'total' => $total,
+    ];
+
+    $addresses = UserAddress::where('user_id', $user->id)->get()->toArray();
+
+    return view('customer.checkout', compact('cart', 'addresses', 'appliedCoupon'));
+}
+
 
 
 /**
@@ -363,16 +513,16 @@ public function placeOrder(Request $request)
     $user = Auth::user();
     $cart = Cart::where('user_id', $user->id)->firstOrFail();
     
-    // ✅ Load cart items with variant relationship
+    // Load cart items with variant relationship
     $cartItems = CartItem::where('cart_id', $cart->id)
-        ->with(['product', 'variant']) // ✅ ADD variant
+        ->with(['product', 'variant'])
         ->get();
 
     if ($cartItems->isEmpty()) {
         return back()->with('error', 'Your cart is empty');
     }
 
-    // ✅ Validate stock for each item (variant or product)
+    // Validate stock for each item (variant or product)
     foreach ($cartItems as $item) {
         $availableStock = $item->variant ? $item->variant->stock : $item->product->stock;
         
@@ -398,8 +548,21 @@ public function placeOrder(Request $request)
             return $item->quantity * $item->final_price;
         });
         
-        $discountTotal = 0;
+        // ✅ Get applied coupon from session
+        $appliedCoupon = session('applied_coupon');
+        $coupon = null;
         $couponDiscount = 0;
+
+        if ($appliedCoupon) {
+            $coupon = Coupon::find($appliedCoupon['id']);
+            if ($coupon && $coupon->isValid() && $coupon->canBeUsedBy($user->id)) {
+                $couponDiscount = $coupon->calculateDiscount($totalAmount);
+            } else {
+                session()->forget('applied_coupon');
+            }
+        }
+        
+        $discountTotal = 0;
         $taxAmount = $totalAmount * 0.10;
         $shippingCost = 0;
         $grandTotal = $totalAmount - $couponDiscount + $taxAmount + $shippingCost;
@@ -410,7 +573,7 @@ public function placeOrder(Request $request)
             'vendor_id' => $vendorId,
             'total_amount' => $totalAmount,
             'discount_total' => $discountTotal,
-            'coupon_id' => null,
+            'coupon_id' => $coupon ? $coupon->id : null,
             'coupon_discount' => $couponDiscount,
             'tax_amount' => $taxAmount,
             'shipping_cost' => $shippingCost,
@@ -427,9 +590,8 @@ public function placeOrder(Request $request)
             'country' => $address->country,
         ]);
 
-        // ✅ Create order items with variant support
+        // Create order items with variant support
         foreach ($vendorItems as $item) {
-            // ✅ Store variant details snapshot
             $variantDetails = null;
             if ($item->variant) {
                 $variantDetails = [
@@ -441,32 +603,46 @@ public function placeOrder(Request $request)
             
             $order->items()->create([
                 'product_id' => $item->product_id,
-                'variant_id' => $item->variant_id, // ✅ Store variant_id
-                'variant_details' => $variantDetails, // ✅ Store variant snapshot
+                'variant_id' => $item->variant_id,
+                'variant_details' => $variantDetails,
                 'quantity' => $item->quantity,
                 'price' => $item->price,
                 'final_price' => $item->final_price,
             ]);
 
-            // ✅ Reduce stock (variant or product)
+            // Reduce stock (variant or product)
             if ($item->variant) {
-                // Reduce variant stock
                 $item->variant->stock -= $item->quantity;
                 $item->variant->save();
             } else {
-                // Reduce product stock
                 $product = $item->product;
                 $product->stock -= $item->quantity;
                 $product->save();
             }
         }
+        
+        // ✅ Record coupon usage
+        if ($coupon) {
+            CouponUsage::create([
+                'coupon_id' => $coupon->id,
+                'user_id' => $user->id,
+                'order_id' => $order->id,
+                'discount_amount' => $couponDiscount,
+            ]);
+            
+            $coupon->incrementUsage();
+        }
     }
 
     // Clear cart
     CartItem::where('cart_id', $cart->id)->delete();
+    
+    // ✅ Clear applied coupon from session
+    session()->forget('applied_coupon');
 
     return redirect()->route('customer.orders')->with('success', 'Order placed successfully!');
 }
+
 
     /**
      * Profile page

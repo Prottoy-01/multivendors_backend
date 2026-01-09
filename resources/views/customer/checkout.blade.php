@@ -117,6 +117,82 @@
                     </div>
                 </div>
 
+                {{-- ✅✅✅ NEW: Coupon Code Section ✅✅✅ --}}
+                <div class="card mb-3">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0"><i class="fas fa-ticket-alt"></i> Have a Coupon Code?</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="coupon-section">
+                            @if(isset($appliedCoupon) && $appliedCoupon)
+                                {{-- Applied Coupon Display --}}
+                                <div class="alert alert-success d-flex justify-content-between align-items-center" id="applied-coupon-display">
+                                    <div>
+                                        <i class="fas fa-check-circle"></i>
+                                        <strong>{{ $appliedCoupon['code'] }}</strong> applied!
+                                        <br>
+                                        <small>You're saving ${{ number_format($appliedCoupon['discount'], 2) }}</small>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeCoupon()">
+                                        <i class="fas fa-times"></i> Remove
+                                    </button>
+                                </div>
+                            @else
+                                {{-- Coupon Input Form --}}
+                                <div id="coupon-input-form">
+                                    <div class="input-group mb-3">
+                                        <input type="text" 
+                                               class="form-control" 
+                                               id="coupon-code-input" 
+                                               placeholder="Enter coupon code" 
+                                               style="text-transform: uppercase;">
+                                        <button type="button" 
+                                                class="btn btn-warning" 
+                                                onclick="applyCoupon()">
+                                            <i class="fas fa-tag"></i> Apply
+                                        </button>
+                                    </div>
+                                    <div id="coupon-message"></div>
+                                    
+                                    {{-- Show Available Coupons --}}
+                                    <div class="mt-2">
+                                        <small class="text-muted">
+                                            <i class="fas fa-info-circle"></i> Available coupons:
+                                        </small>
+                                        <div class="mt-2">
+                                            @php
+                                                $availableCoupons = \App\Models\Coupon::valid()
+                                                    ->where(function($q) {
+                                                        $q->whereNull('usage_limit')
+                                                          ->orWhereRaw('usage_count < usage_limit');
+                                                    })
+                                                    ->limit(3)
+                                                    ->get();
+                                            @endphp
+                                            
+                                            @forelse($availableCoupons as $coupon)
+                                                <span class="badge bg-warning text-dark me-2 mb-2" 
+                                                      style="cursor: pointer;" 
+                                                      onclick="document.getElementById('coupon-code-input').value = '{{ $coupon->code }}'">
+                                                    {{ $coupon->code }} 
+                                                    @if($coupon->type === 'percentage')
+                                                        ({{ $coupon->value }}% OFF)
+                                                    @else
+                                                        (${{ $coupon->value }} OFF)
+                                                    @endif
+                                                </span>
+                                            @empty
+                                                <small class="text-muted">No coupons available at this time.</small>
+                                            @endforelse
+                                        </div>
+                                    </div>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+                {{-- ✅✅✅ END: Coupon Code Section ✅✅✅ --}}
+
                 <!-- Order Notes -->
                 <div class="card">
                     <div class="card-header bg-primary text-white">
@@ -158,13 +234,22 @@
                         
                         <hr>
                         
+                        {{-- ✅✅✅ UPDATED: Order Summary with Coupon Discount ✅✅✅ --}}
                         <div class="d-flex justify-content-between mb-2">
                             <span>Subtotal:</span>
-                            <strong>${{ number_format($cart['subtotal'], 2) }}</strong>
+                            <strong id="subtotal-amount">${{ number_format($cart['subtotal'], 2) }}</strong>
                         </div>
+                        
+                        @if(isset($cart['coupon_discount']) && $cart['coupon_discount'] > 0)
+                        <div class="d-flex justify-content-between mb-2 text-success">
+                            <span><i class="fas fa-tag"></i> Coupon Discount:</span>
+                            <strong id="coupon-discount-amount">-${{ number_format($cart['coupon_discount'], 2) }}</strong>
+                        </div>
+                        @endif
+                        
                         <div class="d-flex justify-content-between mb-2">
                             <span>Tax (10%):</span>
-                            <strong>${{ number_format($cart['tax'], 2) }}</strong>
+                            <strong id="tax-amount">${{ number_format($cart['tax'], 2) }}</strong>
                         </div>
                         <div class="d-flex justify-content-between mb-2">
                             <span>Shipping:</span>
@@ -175,8 +260,9 @@
                         
                         <div class="d-flex justify-content-between mb-4">
                             <strong class="fs-5">Total:</strong>
-                            <h4 class="text-success mb-0">${{ number_format($cart['total'], 2) }}</h4>
+                            <h4 class="text-success mb-0" id="total-amount">${{ number_format($cart['total'], 2) }}</h4>
                         </div>
+                        {{-- ✅✅✅ END: Updated Order Summary ✅✅✅ --}}
                         
                         <div class="d-grid gap-2">
                             <button type="submit" class="btn btn-success btn-lg">
@@ -198,4 +284,81 @@
         </div>
     </form>
 </div>
+
+{{-- ✅✅✅ NEW: JavaScript for Coupon Apply/Remove ✅✅✅ --}}
+@push('scripts')
+<script>
+function applyCoupon() {
+    const couponCode = document.getElementById('coupon-code-input').value.trim();
+    const messageDiv = document.getElementById('coupon-message');
+    
+    if (!couponCode) {
+        messageDiv.innerHTML = '<div class="alert alert-danger alert-dismissible fade show"><i class="fas fa-exclamation-circle"></i> Please enter a coupon code<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>';
+        return;
+    }
+    
+    // Show loading
+    messageDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin"></i> Validating coupon...</div>';
+    
+    fetch('{{ route('customer.coupon.apply') }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ coupon_code: couponCode })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message
+            messageDiv.innerHTML = `<div class="alert alert-success"><i class="fas fa-check-circle"></i> ${data.message}</div>`;
+            
+            // Reload page to show updated totals
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            messageDiv.innerHTML = `<div class="alert alert-danger alert-dismissible fade show"><i class="fas fa-times-circle"></i> ${data.message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        messageDiv.innerHTML = '<div class="alert alert-danger alert-dismissible fade show"><i class="fas fa-exclamation-triangle"></i> Error applying coupon. Please try again.<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>';
+    });
+}
+
+function removeCoupon() {
+    if (!confirm('Are you sure you want to remove this coupon?')) {
+        return;
+    }
+    
+    fetch('{{ route('customer.coupon.remove') }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.reload();
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error removing coupon. Please try again.');
+    });
+}
+
+// Allow Enter key to apply coupon
+document.getElementById('coupon-code-input')?.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        applyCoupon();
+    }
+});
+</script>
+@endpush
 @endsection

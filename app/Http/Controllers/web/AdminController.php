@@ -282,7 +282,16 @@ public function vendorDetails($id)
             'valid_until' => 'required|date|after:valid_from',
         ]);
 
-        Coupon::create($request->all());
+       // Coupon::create($request->all());
+       $data = $request->all();
+    $data['code'] = strtoupper($request->code);
+    // ✅✅✅ END FIX ✅✅✅
+    
+
+
+
+
+    Coupon::create($data);
 
         return redirect()->back()->with('success', 'Coupon created successfully!');
     }

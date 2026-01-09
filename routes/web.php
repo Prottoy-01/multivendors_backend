@@ -46,6 +46,8 @@ Route::middleware(['auth'])->prefix('customer')->name('customer.')->group(functi
     Route::post('/cart/add', [CustomerController::class, 'addToCart'])->name('cart.add');
     Route::post('/cart/update/{id}', [CustomerController::class, 'updateCart'])->name('cart.update');
     Route::delete('/cart/remove/{id}', [CustomerController::class, 'removeFromCart'])->name('cart.remove');
+    Route::post('/apply-coupon', [CustomerController::class, 'applyCoupon'])->name('coupon.apply');
+Route::post('/remove-coupon', [CustomerController::class, 'removeCoupon'])->name('coupon.remove');
     Route::get('/checkout', [CustomerController::class, 'checkout'])->name('checkout');
     Route::post('/checkout', [CustomerController::class, 'placeOrder'])->name('checkout.place');
     Route::get('/profile', [CustomerController::class, 'profile'])->name('profile');
@@ -53,6 +55,8 @@ Route::middleware(['auth'])->prefix('customer')->name('customer.')->group(functi
     Route::get('/addresses', [CustomerController::class, 'addresses'])->name('addresses');
     Route::post('/addresses', [CustomerController::class, 'storeAddress'])->name('addresses.store');
     Route::post('/reviews', [CustomerController::class, 'storeReview'])->name('reviews.store');
+
+    
 });
 
 /*
