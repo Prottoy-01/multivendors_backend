@@ -68,7 +68,8 @@ Route::post('/remove-coupon', [CustomerController::class, 'removeCoupon'])->name
 Route::middleware(['auth'])->group(function () {
     Route::post('/payment/stripe/checkout', [\App\Http\Controllers\Web\PaymentController::class, 'createCheckoutSession'])->name('payment.stripe.checkout');
     Route::get('/payment/stripe/success', [\App\Http\Controllers\Web\PaymentController::class, 'handleSuccess'])->name('payment.stripe.success');
-    Route::get('/payment/success/{order}', [\App\Http\Controllers\Web\PaymentController::class, 'success'])->name('payment.success');
+    //Route::get('/payment/success/{order}', [\App\Http\Controllers\Web\PaymentController::class, 'success'])->name('payment.success');
+   Route::get('/payment/success', [\App\Http\Controllers\Web\PaymentController::class, 'success'])->name('payment.success');
     Route::get('/payment/failed', [\App\Http\Controllers\Web\PaymentController::class, 'failed'])->name('payment.failed');
 });
 /*

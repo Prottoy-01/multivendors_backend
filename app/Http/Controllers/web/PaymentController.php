@@ -107,7 +107,7 @@ class PaymentController extends Controller
                 ];
             }
             
-            // Store cart item data
+            // ✅ FIXED: Store simplified cart items with vendor_id at top level
             $simplifiedCartItems = $cartItems->map(function($item) {
                 return [
                     'product_id' => $item->product_id,
@@ -117,7 +117,7 @@ class PaymentController extends Controller
                     'final_price' => $item->final_price,
                     'discount_type' => $item->discount_type ?? null,
                     'discount_value' => $item->discount_value ?? 0,
-                    'vendor_id' => $item->product->vendor_id,
+                    'vendor_id' => $item->product->vendor_id,  // ✅ At top level!
                     'product_name' => $item->product->name,
                 ];
             })->toArray();
@@ -127,7 +127,7 @@ class PaymentController extends Controller
                 'pending_order_data' => [
                     'address_id' => $request->address_id,
                     'notes' => $request->notes,
-                    'cart_items' => $simplifiedCartItems,
+                    'cart_items' => $simplifiedCartItems,  // ✅ Simplified structure
                     'subtotal' => $subtotal,
                     'tax' => $tax,
                     'coupon_discount' => $couponDiscount,
@@ -198,7 +198,6 @@ class PaymentController extends Controller
                     ->with('error', 'Order data not found. Please try again.');
             }
             
-            // Check shipping address
             if (!isset($orderData['shipping_address'])) {
                 return redirect()->route('payment.failed')
                     ->with('error', 'Shipping address not found');
@@ -210,14 +209,18 @@ class PaymentController extends Controller
             DB::beginTransaction();
             
             try {
-                // Group by vendor
+                // ✅ FIXED: Group by vendor_id directly (not nested)
                 $cartItems = collect($orderData['cart_items']);
                 $itemsByVendor = $cartItems->groupBy('vendor_id');
+                
+                Log::info('Multi-vendor grouping: ' . $itemsByVendor->count() . ' vendors found');
                 
                 $allOrders = [];
                 $firstOrder = null;
                 
                 foreach ($itemsByVendor as $vendorId => $vendorItems) {
+                    Log::info("Processing vendor: $vendorId with " . $vendorItems->count() . " items");
+                    
                     // Calculate totals
                     $vendorSubtotal = $vendorItems->sum(function($item) {
                         return $item['quantity'] * $item['final_price'];
@@ -231,7 +234,7 @@ class PaymentController extends Controller
                     $vendorTax = ($vendorSubtotal - $vendorCouponDiscount) * 0.10;
                     $vendorTotal = $vendorSubtotal - $vendorCouponDiscount + $vendorTax;
                     
-                    // Create order
+                    // ✅ Create order with ALL required fields
                     $order = Order::create([
                         'user_id' => $user->id,
                         'vendor_id' => $vendorId,
@@ -246,6 +249,7 @@ class PaymentController extends Controller
                         'payment_status' => 'paid',
                         'transaction_id' => $session->payment_intent,
                         'notes' => $orderData['notes'] ?? null,
+                        // ✅ Address fields
                         'recipient_name' => $shippingAddress['recipient_name'],
                         'phone' => $shippingAddress['phone'],
                         'address_line' => $shippingAddress['address_line'],
@@ -261,7 +265,9 @@ class PaymentController extends Controller
                     
                     $allOrders[] = $order;
                     
-                    // Create order items
+                    Log::info("Order created: {$order->order_number} for vendor $vendorId");
+                    
+                    // ✅ Create order items with ALL required fields
                     foreach ($vendorItems as $itemData) {
                         OrderItem::create([
                             'order_id' => $order->id,
@@ -275,16 +281,16 @@ class PaymentController extends Controller
                         ]);
                     }
                     
-                    // ✅ Create payment record with CORRECT status value
+                    // ✅ Create payment record with CORRECT fields
                     Payment::create([
                         'order_id' => $order->id,
                         'payment_method' => 'card',
-                        'payment_gateway' => 'stripe',                    // ✅ NEW
-                        'transaction_id' => $session->payment_intent,
+                        'payment_gateway' => 'stripe',
+                        'transaction_id' => $session->payment_intent . '-V' . $vendorId,
                         'amount' => $vendorTotal,
-                        'status' => 'completed',                          // ✅ FIXED! (was 'success')
-                        'paid_at' => now(),                               // ✅ NEW
-                        'gateway_response' => json_encode([               // ✅ RENAMED from payment_details
+                        'status' => 'completed',
+                        'paid_at' => now(),
+                        'gateway_response' => json_encode([
                             'session_id' => $sessionId,
                             'payment_intent' => $session->payment_intent,
                             'payment_status' => $session->payment_status,
@@ -294,7 +300,11 @@ class PaymentController extends Controller
                             'net_vendor_amount' => $vendorTotal,
                         ]),
                     ]);
+                    
+                    Log::info("Payment record created for order: {$order->id}");
                 }
+                
+                Log::info("Total orders created: " . count($allOrders));
                 
                 // Clear cart
                 $cart = Cart::where('user_id', $user->id)->first();
@@ -307,7 +317,8 @@ class PaymentController extends Controller
                 
                 DB::commit();
                 
-                return redirect()->route('payment.success', ['order' => $firstOrder->id])
+                // ✅ FIXED: Redirect with transaction_id to show ALL orders
+                return redirect()->route('payment.success', ['transaction_id' => $session->payment_intent])
                     ->with('success', 'Payment successful! Your order has been placed.');
                 
             } catch (\Exception $e) {
@@ -324,15 +335,43 @@ class PaymentController extends Controller
     }
     
     /**
-     * Payment success page
+     * Payment success page - Shows ALL orders from multi-vendor payment
      */
-    public function success($orderId)
+    public function success(Request $request)
     {
-        $order = Order::with(['items.product', 'payment'])
-            ->where('user_id', Auth::id())
-            ->findOrFail($orderId);
+        $transactionId = $request->get('transaction_id');
         
-        return view('payment.success', compact('order'));
+        if (!$transactionId) {
+            return redirect()->route('home')
+                ->with('error', 'Invalid payment reference');
+        }
+        
+        // ✅ Load ALL orders with this transaction_id
+        $orders = Order::with(['items.product', 'payment', 'vendor'])
+            ->where('user_id', Auth::id())
+            ->where('transaction_id', $transactionId)
+            ->get();
+        
+        if ($orders->isEmpty()) {
+            return redirect()->route('home')
+                ->with('error', 'Orders not found');
+        }
+        
+        // Calculate totals across all orders
+        $totalAmount = $orders->sum('grand_total');
+        
+        // Get shipping address from first order (same for all)
+        $shippingAddress = [
+            'recipient_name' => $orders->first()->recipient_name,
+            'phone' => $orders->first()->phone,
+            'address_line' => $orders->first()->address_line,
+            'city' => $orders->first()->city,
+            'state' => $orders->first()->state,
+            'postal_code' => $orders->first()->postal_code,
+            'country' => $orders->first()->country,
+        ];
+        
+        return view('payment.success', compact('orders', 'totalAmount', 'transactionId', 'shippingAddress'));
     }
     
     /**
