@@ -8,9 +8,11 @@ use App\Models\Payment;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\OrderItem;
+use App\Models\UserAddress;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Stripe\Stripe;
 use Stripe\Checkout\Session as StripeSession;
 
@@ -31,11 +33,20 @@ class PaymentController extends Controller
             }
             
             $cartItems = CartItem::where('cart_id', $cart->id)
-                ->with('product')
+                ->with(['product', 'variant'])
                 ->get();
             
             if ($cartItems->isEmpty()) {
                 return back()->with('error', 'Cart is empty');
+            }
+            
+            // Get shipping address
+            $shippingAddress = UserAddress::where('user_id', $user->id)
+                ->where('id', $request->address_id)
+                ->first();
+            
+            if (!$shippingAddress) {
+                return back()->with('error', 'Please select a shipping address');
             }
             
             // Calculate totals
@@ -66,50 +77,70 @@ class PaymentController extends Controller
                             'name' => $item->product->name,
                             'description' => 'Product from ' . config('app.name'),
                         ],
-                        'unit_amount' => round($item->final_price * 100), // Convert to cents
+                        'unit_amount' => round($item->final_price * 100),
                     ],
                     'quantity' => $item->quantity,
                 ];
             }
             
-            // Add tax as line item
+            // Add tax
             if ($tax > 0) {
                 $lineItems[] = [
                     'price_data' => [
                         'currency' => 'usd',
-                        'product_data' => [
-                            'name' => 'Tax (10%)',
-                        ],
+                        'product_data' => ['name' => 'Tax (10%)'],
                         'unit_amount' => round($tax * 100),
                     ],
                     'quantity' => 1,
                 ];
             }
             
-            // Add discount as line item (negative amount)
+            // Add discount
             if ($couponDiscount > 0) {
                 $lineItems[] = [
                     'price_data' => [
                         'currency' => 'usd',
-                        'product_data' => [
-                            'name' => 'Coupon Discount',
-                        ],
+                        'product_data' => ['name' => 'Coupon Discount'],
                         'unit_amount' => -round($couponDiscount * 100),
                     ],
                     'quantity' => 1,
                 ];
             }
             
-            // Store order data in session for later
+            // Store cart item data
+            $simplifiedCartItems = $cartItems->map(function($item) {
+                return [
+                    'product_id' => $item->product_id,
+                    'variant_id' => $item->variant_id,
+                    'quantity' => $item->quantity,
+                    'original_price' => $item->product->price,
+                    'final_price' => $item->final_price,
+                    'discount_type' => $item->discount_type ?? null,
+                    'discount_value' => $item->discount_value ?? 0,
+                    'vendor_id' => $item->product->vendor_id,
+                    'product_name' => $item->product->name,
+                ];
+            })->toArray();
+            
+            // Store order data in session
             session([
                 'pending_order_data' => [
                     'address_id' => $request->address_id,
                     'notes' => $request->notes,
-                    'cart_items' => $cartItems->toArray(),
+                    'cart_items' => $simplifiedCartItems,
                     'subtotal' => $subtotal,
                     'tax' => $tax,
                     'coupon_discount' => $couponDiscount,
                     'total' => $total,
+                    'shipping_address' => [
+                        'recipient_name' => $shippingAddress->recipient_name,
+                        'phone' => $shippingAddress->phone,
+                        'address_line' => $shippingAddress->address_line,
+                        'city' => $shippingAddress->city,
+                        'state' => $shippingAddress->state,
+                        'postal_code' => $shippingAddress->postal_code,
+                        'country' => $shippingAddress->country,
+                    ],
                 ]
             ]);
             
@@ -127,11 +158,10 @@ class PaymentController extends Controller
                 ],
             ]);
             
-            // Redirect to Stripe Checkout
             return redirect($session->url);
             
         } catch (\Exception $e) {
-            \Log::error('Stripe Checkout Error: ' . $e->getMessage());
+            Log::error('Stripe Checkout Error: ' . $e->getMessage());
             return redirect()->route('payment.failed')
                 ->with('error', 'Payment processing error. Please try again.');
         }
@@ -153,7 +183,7 @@ class PaymentController extends Controller
             // Set Stripe API key
             Stripe::setApiKey(config('services.stripe.secret'));
             
-            // Retrieve the session
+            // Retrieve session
             $session = StripeSession::retrieve($sessionId);
             
             if ($session->payment_status !== 'paid') {
@@ -165,28 +195,36 @@ class PaymentController extends Controller
             $orderData = session('pending_order_data');
             if (!$orderData) {
                 return redirect()->route('payment.failed')
-                    ->with('error', 'Order data not found');
+                    ->with('error', 'Order data not found. Please try again.');
+            }
+            
+            // Check shipping address
+            if (!isset($orderData['shipping_address'])) {
+                return redirect()->route('payment.failed')
+                    ->with('error', 'Shipping address not found');
             }
             
             $user = Auth::user();
+            $shippingAddress = $orderData['shipping_address'];
             
             DB::beginTransaction();
             
             try {
-                // Group items by vendor
+                // Group by vendor
                 $cartItems = collect($orderData['cart_items']);
-                $itemsByVendor = $cartItems->groupBy('product.vendor_id');
+                $itemsByVendor = $cartItems->groupBy('vendor_id');
                 
+                $allOrders = [];
                 $firstOrder = null;
                 
-                foreach ($itemsByVendor as $vendorId => $items) {
-                    // Calculate vendor order total
-                    $vendorSubtotal = collect($items)->sum(function($item) {
+                foreach ($itemsByVendor as $vendorId => $vendorItems) {
+                    // Calculate totals
+                    $vendorSubtotal = $vendorItems->sum(function($item) {
                         return $item['quantity'] * $item['final_price'];
                     });
                     
                     $vendorCouponDiscount = 0;
-                    if ($orderData['coupon_discount'] > 0) {
+                    if ($orderData['coupon_discount'] > 0 && $orderData['subtotal'] > 0) {
                         $vendorCouponDiscount = ($vendorSubtotal / $orderData['subtotal']) * $orderData['coupon_discount'];
                     }
                     
@@ -207,38 +245,53 @@ class PaymentController extends Controller
                         'payment_method' => 'card',
                         'payment_status' => 'paid',
                         'transaction_id' => $session->payment_intent,
-                        'shipping_address_id' => $orderData['address_id'],
-                        'notes' => $orderData['notes'],
+                        'notes' => $orderData['notes'] ?? null,
+                        'recipient_name' => $shippingAddress['recipient_name'],
+                        'phone' => $shippingAddress['phone'],
+                        'address_line' => $shippingAddress['address_line'],
+                        'city' => $shippingAddress['city'],
+                        'state' => $shippingAddress['state'],
+                        'postal_code' => $shippingAddress['postal_code'],
+                        'country' => $shippingAddress['country'],
                     ]);
                     
                     if (!$firstOrder) {
                         $firstOrder = $order;
                     }
                     
+                    $allOrders[] = $order;
+                    
                     // Create order items
-                    foreach ($items as $item) {
+                    foreach ($vendorItems as $itemData) {
                         OrderItem::create([
                             'order_id' => $order->id,
-                            'product_id' => $item['product_id'],
-                            'variant_id' => $item['variant_id'],
-                            'quantity' => $item['quantity'],
-                            'price' => $item['final_price'],
-                            'total' => $item['quantity'] * $item['final_price'],
+                            'product_id' => $itemData['product_id'],
+                            'variant_id' => $itemData['variant_id'] ?? null,
+                            'quantity' => $itemData['quantity'],
+                            'price' => $itemData['original_price'],
+                            'final_price' => $itemData['final_price'],
+                            'discount_type' => $itemData['discount_type'],
+                            'discount_value' => $itemData['discount_value'],
                         ]);
                     }
                     
-                    // Create payment record
+                    // ✅ Create payment record with CORRECT status value
                     Payment::create([
                         'order_id' => $order->id,
-                        'payment_method' => 'stripe',
+                        'payment_method' => 'card',
+                        'payment_gateway' => 'stripe',                    // ✅ NEW
                         'transaction_id' => $session->payment_intent,
                         'amount' => $vendorTotal,
-                        'currency' => 'USD',
-                        'status' => 'success',
-                        'payment_details' => json_encode([
+                        'status' => 'completed',                          // ✅ FIXED! (was 'success')
+                        'paid_at' => now(),                               // ✅ NEW
+                        'gateway_response' => json_encode([               // ✅ RENAMED from payment_details
                             'session_id' => $sessionId,
                             'payment_intent' => $session->payment_intent,
                             'payment_status' => $session->payment_status,
+                            'vendor_id' => $vendorId,
+                            'vendor_amount' => $vendorTotal,
+                            'platform_fee' => 0,
+                            'net_vendor_amount' => $vendorTotal,
                         ]),
                     ]);
                 }
@@ -254,20 +307,19 @@ class PaymentController extends Controller
                 
                 DB::commit();
                 
-                // Redirect to success page
                 return redirect()->route('payment.success', ['order' => $firstOrder->id])
                     ->with('success', 'Payment successful! Your order has been placed.');
                 
             } catch (\Exception $e) {
                 DB::rollBack();
-                \Log::error('Order creation error: ' . $e->getMessage());
+                Log::error('Order creation error: ' . $e->getMessage());
                 throw $e;
             }
             
         } catch (\Exception $e) {
-            \Log::error('Payment success handler error: ' . $e->getMessage());
+            Log::error('Stripe Success Error: ' . $e->getMessage());
             return redirect()->route('payment.failed')
-                ->with('error', 'Error processing your order. Please contact support.');
+                ->with('error', 'Error: ' . $e->getMessage());
         }
     }
     
@@ -276,7 +328,7 @@ class PaymentController extends Controller
      */
     public function success($orderId)
     {
-        $order = Order::with(['items.product', 'shippingAddress', 'payment'])
+        $order = Order::with(['items.product', 'payment'])
             ->where('user_id', Auth::id())
             ->findOrFail($orderId);
         

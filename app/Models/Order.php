@@ -7,23 +7,28 @@ use Illuminate\Database\Eloquent\Model;
 class Order extends Model
 {
     protected $fillable = [
-         // User & Vendor
+        // User & Vendor
         'user_id',
         'vendor_id',
         
-        // Money fields (ALL REQUIRED - match your database)
+        // Order Info
+        'order_number',        // ✅ ADDED
+        'notes',              // ✅ ADDED
+        
+        // Money fields
         'total_amount',
         'discount_total',
         'coupon_id',
         'coupon_discount',
         'tax_amount',
         'shipping_cost',
-        'grand_total',        // ✅ THIS WAS MISSING - causing error
+        'grand_total',
         
-        // Status fields
+        // Status & Payment
         'status',
         'payment_method',
         'payment_status',
+        'transaction_id',     // ✅ ADDED
         
         // Address fields
         'recipient_name',
@@ -39,6 +44,9 @@ class Order extends Model
         'total_amount' => 'decimal:2',
         'discount_total' => 'decimal:2',
         'grand_total' => 'decimal:2',
+        'tax_amount' => 'decimal:2',
+        'shipping_cost' => 'decimal:2',
+        'coupon_discount' => 'decimal:2',
     ];
 
     /* ================= Relationships ================= */
@@ -58,10 +66,16 @@ class Order extends Model
         return $this->belongsTo(Vendor::class);
     }
 
-    public function coupon()//new
-{
-    return $this->belongsTo(Coupon::class);
-}
+    public function coupon()
+    {
+        return $this->belongsTo(Coupon::class);
+    }
+
+    // ✅ ADDED: Payment relationship
+    public function payment()
+    {
+        return $this->hasOne(Payment::class);
+    }
 
     /* ================= Order Status ================= */
 

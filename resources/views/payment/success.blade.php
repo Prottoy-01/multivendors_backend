@@ -152,16 +152,16 @@
                     
                     <hr>
                     
-                    {{-- Shipping Address --}}
-                    @if($order->shippingAddress)
+                    {{-- ✅ FIXED: Shipping Address using direct fields --}}
+                    @if($order->recipient_name)
                     <h6 class="text-muted mb-3">Shipping Address</h6>
                     <div class="p-3 bg-light rounded">
-                        <p class="mb-1"><strong>{{ $order->shippingAddress->recipient_name }}</strong></p>
-                        <p class="mb-1">{{ $order->shippingAddress->phone }}</p>
+                        <p class="mb-1"><strong>{{ $order->recipient_name }}</strong></p>
+                        <p class="mb-1">{{ $order->phone }}</p>
                         <p class="mb-0">
-                            {{ $order->shippingAddress->address_line }}<br>
-                            {{ $order->shippingAddress->city }}, {{ $order->shippingAddress->state }} {{ $order->shippingAddress->postal_code }}<br>
-                            {{ $order->shippingAddress->country }}
+                            {{ $order->address_line }}<br>
+                            {{ $order->city }}@if($order->state), {{ $order->state }}@endif @if($order->postal_code){{ $order->postal_code }}@endif<br>
+                            {{ $order->country }}
                         </p>
                     </div>
                     @endif
