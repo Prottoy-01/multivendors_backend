@@ -14,29 +14,60 @@ class HomeController extends Controller
      */
     public function index()
     {
-        // Get featured products directly from database
-        // $products = Product::with(['vendor', 'category', 'images'])
-        //     ->orderBy('created_at', 'desc')
-        //     ->limit(8)
-        //     ->get()
-        //     ->toArray();
+        // Get featured products (newest 8 products)
         $products = Product::with(['vendor', 'category', 'images'])
-    ->withAvg(['reviews' => function ($q) {
-        $q->where('is_approved', true);
-    }], 'rating')
-    ->withCount(['reviews as review_count' => function ($q) {
-        $q->where('is_approved', true);
-    }])
-    ->orderBy('created_at', 'desc')
-    ->limit(8)
-    ->get()
-    ->toArray();
+            ->orderBy('created_at', 'desc')
+            ->limit(8)
+            ->get()
+            ->toArray();
 
+        // Get popular products (products with highest ratings, 8 products)
+        $popularProducts = Product::with(['vendor', 'category', 'images'])
+            ->where('avg_rating', '>', 0)
+            ->orderByDesc('avg_rating')
+            ->orderByDesc('review_count')
+            ->limit(8)
+            ->get()
+            ->toArray();
         
-        // Get categories directly from database
+        // If not enough popular products with ratings, fill with random products
+        if (count($popularProducts) < 8) {
+            $additionalCount = 8 - count($popularProducts);
+            $popularProductIds = array_column($popularProducts, 'id');
+            $featuredProductIds = array_column($products, 'id');
+            $excludeIds = array_merge($popularProductIds, $featuredProductIds);
+            
+            $additionalProducts = Product::with(['vendor', 'category', 'images'])
+                ->whereNotIn('id', $excludeIds)
+                ->inRandomOrder()
+                ->limit($additionalCount)
+                ->get()
+                ->toArray();
+            
+            $popularProducts = array_merge($popularProducts, $additionalProducts);
+        }
+
+        // Get all categories
         $categories = Category::orderBy('name')->get()->toArray();
 
-        return view('home', compact('products', 'categories'));
+        // Get products for each category (8 products per category)
+        $categoryProducts = Category::with(['products' => function($query) {
+                $query->with(['vendor', 'images'])
+                    ->limit(8);
+            }])
+            ->orderBy('name')
+            ->get()
+            ->map(function($category) {
+                return [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'description' => $category->description,
+                    'products' => $category->products->toArray()
+                ];
+            })
+            ->toArray();
+
+        return view('home', compact('products', 'popularProducts', 'categories', 'categoryProducts'));
     }
 
     /**
@@ -44,15 +75,7 @@ class HomeController extends Controller
      */
     public function products(Request $request)
     {
-       // $query = Product::with(['vendor', 'category', 'images']);
-       $query = Product::with(['vendor', 'category', 'images'])
-    ->withAvg(['reviews' => function ($q) {
-        $q->where('is_approved', true);
-    }], 'rating')
-    ->withCount(['reviews as review_count' => function ($q) {
-        $q->where('is_approved', true);
-    }]);
-
+        $query = Product::with(['vendor', 'category', 'images']);
 
         // Search
         if ($request->has('search') && $request->search != '') {
@@ -113,125 +136,75 @@ class HomeController extends Controller
     /**
      * Show product detail page
      */
-    /**
- * Show product detail page
- */
-// public function productDetail($id)
-// {
-//     $product = Product::with([
-//         'vendor', 
-//         'category', 
-//         'images', 
-//         'reviews.user',
-//         'activeVariants' => function($query) {
-//             $query->orderBy('price', 'asc');
-//         }
-//     ])->findOrFail($id);
-    
-//     // Get variant attributes for selection
-//     $variantAttributes = [];
-//     $hasVariants = $product->hasVariants();
-    
-//     if ($hasVariants) {
-//         foreach ($product->activeVariants as $variant) {
-//             foreach ($variant->attributes as $key => $value) {
-//                 if (!isset($variantAttributes[$key])) {
-//                     $variantAttributes[$key] = [];
-//                 }
-//                 if (!in_array($value, $variantAttributes[$key])) {
-//                     $variantAttributes[$key][] = $value;
-//                 }
-//             }
-//         }
-//     }
-    
-//     $product = $product->toArray();
-    
-//     // Get reviews
-//     $reviews = $product['reviews'] ?? [];
-
-//     // Get related products (same category)
-//     $relatedProducts = Product::with(['vendor', 'category', 'images'])
-//         ->where('category_id', $product['category_id'])
-//         ->where('id', '!=', $id)
-//         ->limit(4)
-//         ->get()
-//         ->toArray();
-
-//     return view('products.show', compact('product', 'reviews', 'relatedProducts', 'variantAttributes', 'hasVariants'));
-// }
-/**
- * Show product detail page
- */
-public function productDetail($id)
-{
-    $product = Product::with([
-        'vendor', 
-        'category', 
-        'images', 
-        'reviews.user',
-        'activeVariants' => function($query) {
-            $query->orderBy('price', 'asc');
+    public function productDetail($id)
+    {
+        $product = Product::with([
+            'vendor', 
+            'category', 
+            'images', 
+            'reviews.user',
+            'activeVariants' => function($query) {
+                $query->orderBy('price', 'asc');
+            }
+        ])->findOrFail($id);
+        
+        // Calculate final price
+        $product->final_price = $product->price;
+        if ($product->has_offer && $product->discount_value) {
+            if ($product->discount_type === 'percentage') {
+                $product->final_price = $product->price - ($product->price * $product->discount_value / 100);
+            } else {
+                $product->final_price = $product->price - $product->discount_value;
+            }
         }
-    ])->findOrFail($id);
-    
-    // Calculate final price
-    $product->final_price = $product->price;
-    if ($product->has_offer && $product->discount_value) {
-        if ($product->discount_type === 'percentage') {
-            $product->final_price = $product->price - ($product->price * $product->discount_value / 100);
-        } else {
-            $product->final_price = $product->price - $product->discount_value;
-        }
-    }
-    
-    $product->image_urls = $product->images->map(fn($img) => asset('storage/' . $img->image_path));
-    
-    // ✅ Get variant attributes for selection
-    $variantAttributes = [];
-    $hasVariants = $product->hasVariants();
-    
-    if ($hasVariants) {
-        foreach ($product->activeVariants as $variant) {
-            foreach ($variant->attributes as $key => $value) {
-                if (!isset($variantAttributes[$key])) {
-                    $variantAttributes[$key] = [];
-                }
-                if (!in_array($value, $variantAttributes[$key])) {
-                    $variantAttributes[$key][] = $value;
+        
+        $product->image_urls = $product->images->map(fn($img) => asset('storage/' . $img->image_path));
+        
+        // Get variant attributes for selection
+        $variantAttributes = [];
+        $hasVariants = $product->hasVariants();
+        
+        if ($hasVariants) {
+            foreach ($product->activeVariants as $variant) {
+                foreach ($variant->attributes as $key => $value) {
+                    if (!isset($variantAttributes[$key])) {
+                        $variantAttributes[$key] = [];
+                    }
+                    if (!in_array($value, $variantAttributes[$key])) {
+                        $variantAttributes[$key][] = $value;
+                    }
                 }
             }
         }
-    }
-    
-    $product = $product->toArray();
-    
-    // Get reviews
-    $reviews = $product['reviews'] ?? [];
-    
-    // Get related products
-    $relatedProducts = Product::where('category_id', $product['category_id'])
-        ->where('id', '!=', $id)
-        ->with(['images'])
-        ->limit(4)
-        ->get()
-        ->map(function($p) {
-            $p->image_urls = $p->images->map(fn($img) => asset('storage/' . $img->image_path));
-            $p->final_price = $p->price;
-            if ($p->has_offer && $p->discount_value) {
-                if ($p->discount_type === 'percentage') {
-                    $p->final_price = $p->price - ($p->price * $p->discount_value / 100);
-                } else {
-                    $p->final_price = $p->price - $p->discount_value;
+        
+        $product = $product->toArray();
+        
+        // Get reviews
+        $reviews = $product['reviews'] ?? [];
+        
+        // Get related products
+        $relatedProducts = Product::where('category_id', $product['category_id'])
+            ->where('id', '!=', $id)
+            ->with(['images'])
+            ->limit(4)
+            ->get()
+            ->map(function($p) {
+                $p->image_urls = $p->images->map(fn($img) => asset('storage/' . $img->image_path));
+                $p->final_price = $p->price;
+                if ($p->has_offer && $p->discount_value) {
+                    if ($p->discount_type === 'percentage') {
+                        $p->final_price = $p->price - ($p->price * $p->discount_value / 100);
+                    } else {
+                        $p->final_price = $p->price - $p->discount_value;
+                    }
                 }
-            }
-            return $p;
-        })
-        ->toArray();
-    
-    // ✅ Pass variant data to view
-    return view('products.show', compact('product', 'relatedProducts', 'variantAttributes', 'hasVariants', 'reviews'));
-}
+                return $p;
+            })
+            ->toArray();
+        
+        return view('products.show', compact('product', 'relatedProducts', 'variantAttributes', 'hasVariants', 'reviews'));
+    }
+
     /**
      * Show products by category
      */

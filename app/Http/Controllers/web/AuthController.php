@@ -68,7 +68,7 @@ class AuthController extends Controller
             } elseif ($user->role === 'vendor') {
                 return redirect()->route('vendor.dashboard')->with('success', 'Welcome back!');
             } else {
-                return redirect()->route('customer.dashboard')->with('success', 'Welcome back!');
+                return redirect()->route('home')->with('success', 'Welcome back!');
             }
         }
 
@@ -115,7 +115,7 @@ class AuthController extends Controller
             'status' => $user->status, // ✅ Include status
         ]);
 
-        return redirect()->route('customer.dashboard')->with('success', 'Registration successful! Welcome!');
+        return redirect()->route('home')->with('success', 'Registration successful! Welcome!');
     }
 
     /**

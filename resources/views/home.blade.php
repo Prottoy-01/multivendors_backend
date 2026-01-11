@@ -23,10 +23,471 @@
         </div>
     </div>
 
-    <!-- Categories Section -->
+    <!-- Featured Products -->
+    <div class="mb-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-star text-warning"></i> Featured Products</h2>
+            <a href="{{ route('products.index') }}" class="btn btn-outline-primary">View All</a>
+        </div>
+        
+        <div class="row">
+            @forelse($products as $product)
+            <div class="col-md-3 col-sm-6 mb-4">
+                <div class="card product-card h-100">
+                    {{-- Product Image with Badges --}}
+                    <div class="product-image-wrapper position-relative">
+                        @if(!empty($product['image_urls']) && count($product['image_urls']) > 0)
+                            <img src="{{ $product['image_urls'][0] }}" 
+                                 class="card-img-top product-image" 
+                                 alt="{{ $product['name'] }}">
+                        @else
+                            <img src="https://via.placeholder.com/300x200?text=No+Image" 
+                                 class="card-img-top product-image" 
+                                 alt="No Image">
+                        @endif
+                        
+                        {{-- Discount Badge --}}
+                        @if($product['has_offer'] && $product['final_price'] < $product['price'])
+                            <span class="badge badge-discount position-absolute">
+                                @if($product['discount_type'] == 'percentage')
+                                    {{ $product['discount_value'] }}% OFF
+                                @else
+                                    ${{ $product['discount_value'] }} OFF
+                                @endif
+                            </span>
+                        @endif
+
+                        {{-- Stock Badge --}}
+                        @if($product['stock'] == 0)
+                            <span class="badge badge-stock badge-out-stock position-absolute">
+                                Out of Stock
+                            </span>
+                        @elseif($product['stock'] < 10)
+                            <span class="badge badge-stock badge-low-stock position-absolute">
+                                Only {{ $product['stock'] }} left
+                            </span>
+                        @endif
+                        
+                        {{-- Wishlist Button --}}
+                        @if(Session::has('user') && Session::get('user')['role'] === 'customer')
+                            <button class="btn btn-sm btn-light wishlist-btn position-absolute" 
+                                    data-product-id="{{ $product['id'] }}">
+                                <i class="far fa-heart"></i>
+                            </button>
+                        @endif
+                    </div>
+                    
+                    {{-- Card Body - Compact Design --}}
+                    <div class="card-body d-flex flex-column p-3">
+                        {{-- Category Badge --}}
+                        @if(!empty($product['category']))
+                            <div class="mb-2">
+                                <span class="badge bg-secondary small">{{ $product['category']['name'] }}</span>
+                            </div>
+                        @endif
+                        
+                        {{-- Product Title (2 lines max) --}}
+                        <h6 class="product-title mb-2">
+                            {{ Str::limit($product['name'], 50) }}
+                        </h6>
+                        
+                        {{-- Product Description (1 line only) --}}
+                        <p class="product-description text-muted small mb-3">
+                            {{ Str::limit($product['description'], 60) }}
+                        </p>
+                        
+                        {{-- Spacer to push content to bottom --}}
+                        <div class="mt-auto">
+                            {{-- Price and Review Row --}}
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                {{-- LEFT: Price --}}
+                                <div class="price-section">
+                                    @if($product['has_offer'] && $product['final_price'] < $product['price'])
+                                        <div class="price-with-discount">
+                                            <small class="text-muted text-decoration-line-through d-block">
+                                                ${{ number_format($product['price'], 2) }}
+                                            </small>
+                                            <span class="text-danger fw-bold fs-6">
+                                                ${{ number_format($product['final_price'], 2) }}
+                                            </span>
+                                        </div>
+                                    @else
+                                        <span class="text-primary fw-bold fs-6">
+                                            ${{ number_format($product['price'], 2) }}
+                                        </span>
+                                    @endif
+                                </div>
+                                
+                                {{-- RIGHT: Review and Save --}}
+                                <div class="info-section text-end">
+                                    {{-- Rating --}}
+                                    @if(!empty($product['avg_rating']) && $product['avg_rating'] > 0)
+                                        <div class="rating-badge mb-1">
+                                            <span class="badge bg-warning text-dark small">
+                                                <i class="fas fa-star"></i> {{ number_format($product['avg_rating'], 1) }}
+                                            </span>
+                                        </div>
+                                    @endif
+                                    
+                                    {{-- Savings --}}
+                                    @if($product['has_offer'] && $product['final_price'] < $product['price'])
+                                        <div class="save-badge">
+                                            <small class="badge bg-success small">
+                                                Save ${{ number_format($product['price'] - $product['final_price'], 2) }}
+                                            </small>
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                            
+                            {{-- Action Buttons - Beautiful Design --}}
+                            <div class="button-group d-flex gap-2">
+                                <a href="{{ route('products.show', $product['id']) }}" 
+                                   class="btn btn-view flex-fill">
+                                    <i class="fas fa-eye"></i> View
+                                </a>
+                                @if(Session::has('user') && Session::get('user')['role'] === 'customer')
+                                    <form action="{{ route('customer.cart.add') }}" 
+                                          method="POST" 
+                                          class="flex-fill">
+                                        @csrf
+                                        <input type="hidden" name="product_id" value="{{ $product['id'] }}">
+                                        <button type="submit" 
+                                                class="btn btn-cart w-100"
+                                                {{ $product['stock'] == 0 ? 'disabled' : '' }}>
+                                            <i class="fas fa-shopping-cart"></i> Cart
+                                        </button>
+                                    </form>
+                                @else
+                                    <a href="{{ route('login') }}" class="btn btn-cart flex-fill">
+                                        <i class="fas fa-shopping-cart"></i> Cart
+                                    </a>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            @empty
+            <div class="col-12">
+                <div class="alert alert-info text-center">
+                    <i class="fas fa-info-circle"></i> No products available at the moment.
+                </div>
+            </div>
+            @endforelse
+        </div>
+    </div>
+
+    <!-- Popular Products -->
+    @if(!empty($popularProducts) && count($popularProducts) > 0)
+    <div class="mb-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-fire text-danger"></i> Popular Products</h2>
+            <a href="{{ route('products.index') }}" class="btn btn-outline-primary">View All</a>
+        </div>
+        
+        <div class="row">
+            @foreach($popularProducts as $product)
+            <div class="col-md-3 col-sm-6 mb-4">
+                <div class="card product-card h-100">
+                    {{-- Product Image with Badges --}}
+                    <div class="product-image-wrapper position-relative">
+                        @if(!empty($product['image_urls']) && count($product['image_urls']) > 0)
+                            <img src="{{ $product['image_urls'][0] }}" 
+                                 class="card-img-top product-image" 
+                                 alt="{{ $product['name'] }}">
+                        @else
+                            <img src="https://via.placeholder.com/300x200?text=No+Image" 
+                                 class="card-img-top product-image" 
+                                 alt="No Image">
+                        @endif
+                        
+                        {{-- Discount Badge --}}
+                        @if($product['has_offer'] && $product['final_price'] < $product['price'])
+                            <span class="badge badge-discount position-absolute">
+                                @if($product['discount_type'] == 'percentage')
+                                    {{ $product['discount_value'] }}% OFF
+                                @else
+                                    ${{ $product['discount_value'] }} OFF
+                                @endif
+                            </span>
+                        @endif
+
+                        {{-- Stock Badge --}}
+                        @if($product['stock'] == 0)
+                            <span class="badge badge-stock badge-out-stock position-absolute">
+                                Out of Stock
+                            </span>
+                        @elseif($product['stock'] < 10)
+                            <span class="badge badge-stock badge-low-stock position-absolute">
+                                Only {{ $product['stock'] }} left
+                            </span>
+                        @endif
+                        
+                        {{-- Wishlist Button --}}
+                        @if(Session::has('user') && Session::get('user')['role'] === 'customer')
+                            <button class="btn btn-sm btn-light wishlist-btn position-absolute" 
+                                    data-product-id="{{ $product['id'] }}">
+                                <i class="far fa-heart"></i>
+                            </button>
+                        @endif
+                    </div>
+                    
+                    {{-- Card Body - Compact Design --}}
+                    <div class="card-body d-flex flex-column p-3">
+                        {{-- Category Badge --}}
+                        @if(!empty($product['category']))
+                            <div class="mb-2">
+                                <span class="badge bg-secondary small">{{ $product['category']['name'] }}</span>
+                            </div>
+                        @endif
+                        
+                        {{-- Product Title (2 lines max) --}}
+                        <h6 class="product-title mb-2">
+                            {{ Str::limit($product['name'], 50) }}
+                        </h6>
+                        
+                        {{-- Product Description (1 line only) --}}
+                        <p class="product-description text-muted small mb-3">
+                            {{ Str::limit($product['description'], 60) }}
+                        </p>
+                        
+                        {{-- Spacer to push content to bottom --}}
+                        <div class="mt-auto">
+                            {{-- Price and Review Row --}}
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                {{-- LEFT: Price --}}
+                                <div class="price-section">
+                                    @if($product['has_offer'] && $product['final_price'] < $product['price'])
+                                        <div class="price-with-discount">
+                                            <small class="text-muted text-decoration-line-through d-block">
+                                                ${{ number_format($product['price'], 2) }}
+                                            </small>
+                                            <span class="text-danger fw-bold fs-6">
+                                                ${{ number_format($product['final_price'], 2) }}
+                                            </span>
+                                        </div>
+                                    @else
+                                        <span class="text-primary fw-bold fs-6">
+                                            ${{ number_format($product['price'], 2) }}
+                                        </span>
+                                    @endif
+                                </div>
+                                
+                                {{-- RIGHT: Review and Save --}}
+                                <div class="info-section text-end">
+                                    {{-- Rating --}}
+                                    @if(!empty($product['avg_rating']) && $product['avg_rating'] > 0)
+                                        <div class="rating-badge mb-1">
+                                            <span class="badge bg-warning text-dark small">
+                                                <i class="fas fa-star"></i> {{ number_format($product['avg_rating'], 1) }}
+                                            </span>
+                                        </div>
+                                    @endif
+                                    
+                                    {{-- Savings --}}
+                                    @if($product['has_offer'] && $product['final_price'] < $product['price'])
+                                        <div class="save-badge">
+                                            <small class="badge bg-success small">
+                                                Save ${{ number_format($product['price'] - $product['final_price'], 2) }}
+                                            </small>
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                            
+                            {{-- Action Buttons - Beautiful Design --}}
+                            <div class="button-group d-flex gap-2">
+                                <a href="{{ route('products.show', $product['id']) }}" 
+                                   class="btn btn-view flex-fill">
+                                    <i class="fas fa-eye"></i> View
+                                </a>
+                                @if(Session::has('user') && Session::get('user')['role'] === 'customer')
+                                    <form action="{{ route('customer.cart.add') }}" 
+                                          method="POST" 
+                                          class="flex-fill">
+                                        @csrf
+                                        <input type="hidden" name="product_id" value="{{ $product['id'] }}">
+                                        <button type="submit" 
+                                                class="btn btn-cart w-100"
+                                                {{ $product['stock'] == 0 ? 'disabled' : '' }}>
+                                            <i class="fas fa-shopping-cart"></i> Cart
+                                        </button>
+                                    </form>
+                                @else
+                                    <a href="{{ route('login') }}" class="btn btn-cart flex-fill">
+                                        <i class="fas fa-shopping-cart"></i> Cart
+                                    </a>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            @endforeach
+        </div>
+    </div>
+    @endif
+
+    <!-- Products by Category -->
+    @if(!empty($categoryProducts))
+        @foreach($categoryProducts as $categoryData)
+            @if(!empty($categoryData['products']) && count($categoryData['products']) > 0)
+            <div class="mb-5">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2><i class="fas fa-tag text-info"></i> {{ $categoryData['name'] }}</h2>
+                    <a href="{{ route('category.show', $categoryData['id']) }}" class="btn btn-outline-primary">View All</a>
+                </div>
+                
+                <div class="row">
+                    @foreach($categoryData['products'] as $product)
+                    <div class="col-md-3 col-sm-6 mb-4">
+                        <div class="card product-card h-100">
+                            {{-- Product Image with Badges --}}
+                            <div class="product-image-wrapper position-relative">
+                                @if(!empty($product['image_urls']) && count($product['image_urls']) > 0)
+                                    <img src="{{ $product['image_urls'][0] }}" 
+                                         class="card-img-top product-image" 
+                                         alt="{{ $product['name'] }}">
+                                @else
+                                    <img src="https://via.placeholder.com/300x200?text=No+Image" 
+                                         class="card-img-top product-image" 
+                                         alt="No Image">
+                                @endif
+                                
+                                {{-- Discount Badge --}}
+                                @if($product['has_offer'] && $product['final_price'] < $product['price'])
+                                    <span class="badge badge-discount position-absolute">
+                                        @if($product['discount_type'] == 'percentage')
+                                            {{ $product['discount_value'] }}% OFF
+                                        @else
+                                            ${{ $product['discount_value'] }} OFF
+                                        @endif
+                                    </span>
+                                @endif
+
+                                {{-- Stock Badge --}}
+                                @if($product['stock'] == 0)
+                                    <span class="badge badge-stock badge-out-stock position-absolute">
+                                        Out of Stock
+                                    </span>
+                                @elseif($product['stock'] < 10)
+                                    <span class="badge badge-stock badge-low-stock position-absolute">
+                                        Only {{ $product['stock'] }} left
+                                    </span>
+                                @endif
+                                
+                                {{-- Wishlist Button --}}
+                                @if(Session::has('user') && Session::get('user')['role'] === 'customer')
+                                    <button class="btn btn-sm btn-light wishlist-btn position-absolute" 
+                                            data-product-id="{{ $product['id'] }}">
+                                        <i class="far fa-heart"></i>
+                                    </button>
+                                @endif
+                            </div>
+                            
+                            {{-- Card Body - Compact Design --}}
+                            <div class="card-body d-flex flex-column p-3">
+                                {{-- Category Badge --}}
+                                @if(!empty($product['category']))
+                                    <div class="mb-2">
+                                        <span class="badge bg-secondary small">{{ $product['category']['name'] }}</span>
+                                    </div>
+                                @endif
+                                
+                                {{-- Product Title (2 lines max) --}}
+                                <h6 class="product-title mb-2">
+                                    {{ Str::limit($product['name'], 50) }}
+                                </h6>
+                                
+                                {{-- Product Description (1 line only) --}}
+                                <p class="product-description text-muted small mb-3">
+                                    {{ Str::limit($product['description'], 60) }}
+                                </p>
+                                
+                                {{-- Spacer to push content to bottom --}}
+                                <div class="mt-auto">
+                                    {{-- Price and Review Row --}}
+                                    <div class="d-flex justify-content-between align-items-start mb-3">
+                                        {{-- LEFT: Price --}}
+                                        <div class="price-section">
+                                            @if($product['has_offer'] && $product['final_price'] < $product['price'])
+                                                <div class="price-with-discount">
+                                                    <small class="text-muted text-decoration-line-through d-block">
+                                                        ${{ number_format($product['price'], 2) }}
+                                                    </small>
+                                                    <span class="text-danger fw-bold fs-6">
+                                                        ${{ number_format($product['final_price'], 2) }}
+                                                    </span>
+                                                </div>
+                                            @else
+                                                <span class="text-primary fw-bold fs-6">
+                                                    ${{ number_format($product['price'], 2) }}
+                                                </span>
+                                            @endif
+                                        </div>
+                                        
+                                        {{-- RIGHT: Review and Save --}}
+                                        <div class="info-section text-end">
+                                            {{-- Rating --}}
+                                            @if(!empty($product['avg_rating']) && $product['avg_rating'] > 0)
+                                                <div class="rating-badge mb-1">
+                                                    <span class="badge bg-warning text-dark small">
+                                                        <i class="fas fa-star"></i> {{ number_format($product['avg_rating'], 1) }}
+                                                    </span>
+                                                </div>
+                                            @endif
+                                            
+                                            {{-- Savings --}}
+                                            @if($product['has_offer'] && $product['final_price'] < $product['price'])
+                                                <div class="save-badge">
+                                                    <small class="badge bg-success small">
+                                                        Save ${{ number_format($product['price'] - $product['final_price'], 2) }}
+                                                    </small>
+                                                </div>
+                                            @endif
+                                        </div>
+                                    </div>
+                                    
+                                    {{-- Action Buttons - Beautiful Design --}}
+                                    <div class="button-group d-flex gap-2">
+                                        <a href="{{ route('products.show', $product['id']) }}" 
+                                           class="btn btn-view flex-fill">
+                                            <i class="fas fa-eye"></i> View
+                                        </a>
+                                        @if(Session::has('user') && Session::get('user')['role'] === 'customer')
+                                            <form action="{{ route('customer.cart.add') }}" 
+                                                  method="POST" 
+                                                  class="flex-fill">
+                                                @csrf
+                                                <input type="hidden" name="product_id" value="{{ $product['id'] }}">
+                                                <button type="submit" 
+                                                        class="btn btn-cart w-100"
+                                                        {{ $product['stock'] == 0 ? 'disabled' : '' }}>
+                                                    <i class="fas fa-shopping-cart"></i> Cart
+                                                </button>
+                                            </form>
+                                        @else
+                                            <a href="{{ route('login') }}" class="btn btn-cart flex-fill">
+                                                <i class="fas fa-shopping-cart"></i> Cart
+                                            </a>
+                                        @endif
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    @endforeach
+                </div>
+            </div>
+            @endif
+        @endforeach
+    @endif
+
+    <!-- Categories Section (Moved to Bottom) -->
     @if(!empty($categories))
     <div class="mb-5">
-        <h2 class="mb-4">Shop by Category</h2>
+        <h2 class="mb-4"><i class="fas fa-th-large text-success"></i> Shop by Category</h2>
         <div class="row">
             @foreach($categories as $category)
             <div class="col-md-3 col-sm-6 mb-4">
@@ -46,145 +507,6 @@
         </div>
     </div>
     @endif
-
-    <!-- Featured Products -->
-    <div class="mb-5">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2>Featured Products</h2>
-            <a href="{{ route('products.index') }}" class="btn btn-outline-primary">View All</a>
-        </div>
-        
-      <div class="row">
-    @forelse($products as $product)
-    <div class="col-md-3 col-sm-6 mb-4">
-        <div class="card product-card h-100">
-            {{-- Product Image with Badges --}}
-            <div class="product-image-wrapper position-relative">
-                @if(!empty($product['image_urls']) && count($product['image_urls']) > 0)
-                    <img src="{{ $product['image_urls'][0] }}" 
-                         class="card-img-top product-image" 
-                         alt="{{ $product['name'] }}">
-                @else
-                    <img src="https://via.placeholder.com/300x200?text=No+Image" 
-                         class="card-img-top product-image" 
-                         alt="No Image">
-                @endif
-                
-                {{-- Discount Badge --}}
-                @if($product['has_offer'] && $product['final_price'] < $product['price'])
-                    <span class="badge badge-discount position-absolute">
-                        @if($product['discount_type'] == 'percentage')
-                            {{ $product['discount_value'] }}% OFF
-                        @else
-                            ${{ $product['discount_value'] }} OFF
-                        @endif
-                    </span>
-                @endif
-
-                {{-- Stock Badge --}}
-                @if($product['stock'] == 0)
-                    <span class="badge badge-stock badge-out-stock position-absolute">
-                        Out of Stock
-                    </span>
-                @elseif($product['stock'] < 10)
-                    <span class="badge badge-stock badge-low-stock position-absolute">
-                        Only {{ $product['stock'] }} left
-                    </span>
-                @endif
-            </div>
-            
-            {{-- Card Body - Compact Design --}}
-            <div class="card-body d-flex flex-column p-3">
-                {{-- Product Title (2 lines max) --}}
-                <h6 class="product-title mb-2">
-                    {{ Str::limit($product['name'], 50) }}
-                </h6>
-                
-                {{-- Product Description (1 line only) --}}
-                <p class="product-description text-muted small mb-3">
-                    {{ Str::limit($product['description'], 60) }}
-                </p>
-                
-                {{-- Spacer to push content to bottom --}}
-                <div class="mt-auto">
-                    {{-- Price and Review Row --}}
-                    <div class="d-flex justify-content-between align-items-start mb-3">
-                        {{-- LEFT: Price --}}
-                        <div class="price-section">
-                            @if($product['has_offer'] && $product['final_price'] < $product['price'])
-                                <div class="price-with-discount">
-                                    <small class="text-muted text-decoration-line-through d-block">
-                                        ${{ number_format($product['price'], 2) }}
-                                    </small>
-                                    <span class="text-danger fw-bold fs-6">
-                                        ${{ number_format($product['final_price'], 2) }}
-                                    </span>
-                                </div>
-                            @else
-                                <span class="text-primary fw-bold fs-6">
-                                    ${{ number_format($product['price'], 2) }}
-                                </span>
-                            @endif
-                        </div>
-                        
-                        {{-- RIGHT: Review and Save --}}
-                        <div class="info-section text-end">
-                            {{-- Rating --}}
-                            @if(!empty($product['avg_rating']) && $product['avg_rating'] > 0)
-                                <div class="rating-badge mb-1">
-                                    <span class="badge bg-warning text-dark small">
-                                        <i class="fas fa-star"></i> {{ number_format($product['avg_rating'], 1) }}
-                                    </span>
-                                </div>
-                            @endif
-                            
-                            {{-- Savings --}}
-                            @if($product['has_offer'] && $product['final_price'] < $product['price'])
-                                <div class="save-badge">
-                                    <small class="badge bg-success small">
-                                        Save ${{ number_format($product['price'] - $product['final_price'], 2) }}
-                                    </small>
-                                </div>
-                            @endif
-                        </div>
-                    </div>
-                    
-                    {{-- Action Buttons - Beautiful Design --}}
-                    <div class="button-group d-flex gap-2">
-                        <a href="{{ route('products.show', $product['id']) }}" 
-                           class="btn btn-view flex-fill">
-                            <i class="fas fa-eye"></i> View
-                        </a>
-                        @if(Session::has('user') && Session::get('user')['role'] === 'customer')
-                            <form action="{{ route('customer.cart.add') }}" 
-                                  method="POST" 
-                                  class="flex-fill">
-                                @csrf
-                                <input type="hidden" name="product_id" value="{{ $product['id'] }}">
-                                <button type="submit" 
-                                        class="btn btn-cart w-100"
-                                        {{ $product['stock'] == 0 ? 'disabled' : '' }}>
-                                    <i class="fas fa-shopping-cart"></i> Cart
-                                </button>
-                            </form>
-                        @else
-                            <a href="{{ route('login') }}" class="btn btn-cart flex-fill">
-                                <i class="fas fa-shopping-cart"></i> Cart
-                            </a>
-                        @endif
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    @empty
-    <div class="col-12">
-        <div class="alert alert-info text-center">
-            <i class="fas fa-info-circle"></i> No products available at the moment.
-        </div>
-    </div>
-    @endforelse
-</div>
 
     <!-- Features Section -->
     <div class="row mb-5">
@@ -214,6 +536,9 @@
 
 @push('styles')
 <style>
+    /* ========================================
+       HERO SECTION
+       ======================================== */
     .hero-section {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
@@ -221,22 +546,10 @@
     .hero-section h1, .hero-section p {
         color: white;
     }
-    .category-card:hover {
-        transform: translateY(-5px);
-        transition: all 0.3s;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-    .feature-box {
-        border: 1px solid #e0e0e0;
-        border-radius: 10px;
-        transition: all 0.3s;
-    }
-    .feature-box:hover {
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
     
     /* ========================================
        COMPACT PRODUCT CARD STYLES
+       (Exact copy from products/index.blade.php)
        ======================================== */
     
     .product-card {
@@ -306,6 +619,35 @@
         background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
         color: white;
         box-shadow: 0 4px 10px rgba(240, 147, 251, 0.3);
+    }
+
+    .wishlist-btn {
+        bottom: 12px;
+        right: 12px;
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.95);
+        border: 2px solid #e0e0e0;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 3;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+    }
+
+    .wishlist-btn:hover {
+        background: white;
+        border-color: #dc3545;
+        transform: scale(1.15);
+        box-shadow: 0 6px 20px rgba(220, 53, 69, 0.3);
+    }
+
+    .wishlist-btn i {
+        font-size: 1rem;
+        color: #dc3545;
     }
 
     .card-body {
@@ -424,6 +766,28 @@
         }
     }
 
+    /* ========================================
+       CATEGORY CARDS & FEATURES
+       ======================================== */
+    .category-card:hover {
+        transform: translateY(-5px);
+        transition: all 0.3s;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    .feature-box {
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        transition: all 0.3s;
+    }
+    
+    .feature-box:hover {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+
+    /* ========================================
+       RESPONSIVE
+       ======================================== */
     @media (max-width: 768px) {
         .product-image-wrapper {
             height: 180px;
@@ -450,5 +814,33 @@
         }
     }
 </style>
+@endpush
+
+@push('scripts')
+<script>
+document.querySelectorAll('.wishlist-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const productId = this.dataset.productId;
+        
+        fetch('{{ route('customer.wishlist.toggle') }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({ product_id: productId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if(data.success) {
+                const icon = this.querySelector('i');
+                icon.classList.toggle('far');
+                icon.classList.toggle('fas');
+                icon.classList.toggle('text-danger');
+            }
+        });
+    });
+});
+</script>
 @endpush
 @endsection
