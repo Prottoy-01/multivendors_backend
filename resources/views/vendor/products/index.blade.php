@@ -88,18 +88,36 @@
                 @forelse($products as $product)
                 <div class="col-md-4 col-sm-6 mb-4">
                     <div class="card product-card h-100">
-                        @if(!empty($product['image_urls']) && count($product['image_urls']) > 0)
-                            <img src="{{ $product['image_urls'][0] }}" class="card-img-top" alt="{{ $product['name'] }}" style="height: 200px; object-fit: cover;">
-                        @else
-                            <img src="https://via.placeholder.com/300x200?text=No+Image" class="card-img-top" alt="No Image">
-                        @endif
-                        
-                        <!-- Wishlist Button -->
-                        @if(Session::has('user') && Session::get('user')['role'] === 'customer')
-                            <button class="btn btn-sm btn-light wishlist-btn" data-product-id="{{ $product['id'] }}" style="position: absolute; top: 10px; right: 10px;">
-                                <i class="far fa-heart"></i>
-                            </button>
-                        @endif
+                        {{-- Product Image with Badges --}}
+                        <div class="position-relative">
+                            @if(!empty($product['image_urls']) && count($product['image_urls']) > 0)
+                                <img src="{{ $product['image_urls'][0] }}" class="card-img-top" alt="{{ $product['name'] }}" style="height: 200px; object-fit: cover;">
+                            @else
+                                <img src="https://via.placeholder.com/300x200?text=No+Image" class="card-img-top" alt="No Image" style="height: 200px; object-fit: cover;">
+                            @endif
+                            
+                            {{-- Discount Badge --}}
+                            @if($product['has_offer'])
+                                <span class="badge bg-danger position-absolute top-0 end-0 m-2">
+                                    @if($product['discount_type'] == 'percentage')
+                                        {{ $product['discount_value'] }}% OFF
+                                    @else
+                                        ${{ $product['discount_value'] }} OFF
+                                    @endif
+                                </span>
+                            @endif
+
+                            {{-- Stock Status Badge --}}
+                            @if($product['stock'] == 0)
+                                <span class="badge bg-dark position-absolute top-0 start-0 m-2">
+                                    Out of Stock
+                                </span>
+                            @elseif($product['stock'] < 10)
+                                <span class="badge bg-warning text-dark position-absolute top-0 start-0 m-2">
+                                    Low Stock
+                                </span>
+                            @endif
+                        </div>
                         
                         <div class="card-body">
                             <h5 class="card-title">{{ Str::limit($product['name'], 40) }}</h5>
@@ -109,41 +127,59 @@
                                 <span class="badge bg-secondary mb-2">{{ $product['category']['name'] }}</span>
                             @endif
                             
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <div>
-                                    @if($product['has_offer'] && $product['final_price'] < $product['price'])
-                                        <span class="text-muted text-decoration-line-through">${{ number_format($product['price'], 2) }}</span>
-                                        <span class="text-danger fw-bold d-block">${{ number_format($product['final_price'], 2) }}</span>
-                                    @else
-                                        <span class="text-primary fw-bold">${{ number_format($product['price'], 2) }}</span>
-                                    @endif
-                                </div>
-                                <div>
-                                    @if(!empty($product['avg_rating']) && $product['avg_rating'] > 0)
-    <span class="badge bg-warning text-dark">
-        <i class="fas fa-star"></i> {{ number_format($product['avg_rating'], 1) }}
-    </span>
-    <small class="text-muted ms-1">
-        ({{ $product['review_count'] ?? 0 }})
-    </small>
-@endif
-
-                                </div>
+                            {{-- Price Display --}}
+                            <div class="mb-3">
+                                @if($product['has_offer'] && $product['final_price'] < $product['price'])
+                                    <div>
+                                        <small class="text-muted text-decoration-line-through">
+                                            ${{ number_format($product['price'], 2) }}
+                                        </small>
+                                        <span class="text-danger fw-bold d-block fs-5">
+                                            ${{ number_format($product['final_price'], 2) }}
+                                        </span>
+                                        <small class="text-success">
+                                            <i class="fas fa-tag"></i> 
+                                            Save ${{ number_format($product['price'] - $product['final_price'], 2) }}
+                                        </small>
+                                    </div>
+                                @else
+                                    <span class="text-primary fw-bold fs-5">
+                                        ${{ number_format($product['price'], 2) }}
+                                    </span>
+                                @endif
                             </div>
+
+                            {{-- Stock Info --}}
+                            <div class="mb-2">
+                                <small class="text-muted">
+                                    <i class="fas fa-boxes"></i> Stock: 
+                                    <strong class="{{ $product['stock'] == 0 ? 'text-danger' : ($product['stock'] < 10 ? 'text-warning' : 'text-success') }}">
+                                        {{ $product['stock'] }} units
+                                    </strong>
+                                </small>
+                            </div>
+
+                            {{-- Rating --}}
+                            @if(!empty($product['avg_rating']) && $product['avg_rating'] > 0)
+                                <div class="mb-3">
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="fas fa-star"></i> {{ number_format($product['avg_rating'], 1) }}
+                                    </span>
+                                    <small class="text-muted">
+                                        ({{ $product['review_count'] ?? 0 }} reviews)
+                                    </small>
+                                </div>
+                            @endif
                             
                             <div class="d-flex gap-2">
-                                <a href="{{ route('products.show', $product['id']) }}" class="btn btn-primary btn-sm flex-grow-1">
-                                    <i class="fas fa-eye"></i> View
+                                <a href="{{ route('vendor.products.edit', $product['id']) }}" class="btn btn-warning btn-sm flex-grow-1">
+                                    <i class="fas fa-edit"></i> Edit Product
                                 </a>
-                                @if(Session::has('user') && Session::get('user')['role'] === 'customer')
-                                    <form action="{{ route('customer.cart.add') }}" method="POST" class="flex-grow-1">
-                                        @csrf
-                                        <input type="hidden" name="product_id" value="{{ $product['id'] }}">
-                                        <button type="submit" class="btn btn-success btn-sm w-100">
-                                            <i class="fas fa-cart-plus"></i> Cart
-                                        </button>
-                                    </form>
-                                @endif
+                                <button type="button" class="btn btn-outline-danger btn-sm delete-product" 
+                                        data-product-id="{{ $product['id'] }}"
+                                        data-product-name="{{ $product['name'] }}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
                             </div>
                             
                             @if($product['stock'] < 10 && $product['stock'] > 0)
@@ -185,29 +221,48 @@
     </div>
 </div>
 
+{{-- Delete Confirmation Modal --}}
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle"></i> Confirm Delete
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this product?</p>
+                <p class="mb-0"><strong id="productName"></strong></p>
+                <p class="text-danger"><small>This action cannot be undone!</small></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> Delete Product
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 @push('scripts')
 <script>
-document.querySelectorAll('.wishlist-btn').forEach(btn => {
+// Delete product confirmation
+document.querySelectorAll('.delete-product').forEach(btn => {
     btn.addEventListener('click', function() {
         const productId = this.dataset.productId;
+        const productName = this.dataset.productName;
         
-        fetch('{{ route('customer.wishlist.toggle') }}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': '{{ csrf_token() }}'
-            },
-            body: JSON.stringify({ product_id: productId })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if(data.success) {
-                const icon = this.querySelector('i');
-                icon.classList.toggle('far');
-                icon.classList.toggle('fas');
-                icon.classList.toggle('text-danger');
-            }
-        });
+        document.getElementById('productName').textContent = productName;
+        document.getElementById('deleteForm').action = `/vendor/products/${productId}`;
+        
+        const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+        modal.show();
     });
 });
 </script>
