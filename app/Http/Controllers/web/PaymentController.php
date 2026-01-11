@@ -9,6 +9,8 @@ use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\OrderItem;
 use App\Models\UserAddress;
+use App\Models\Product;
+use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -38,6 +40,22 @@ class PaymentController extends Controller
             
             if ($cartItems->isEmpty()) {
                 return back()->with('error', 'Cart is empty');
+            }
+            
+            // ✅ ADDED: Check stock availability before checkout
+            foreach ($cartItems as $item) {
+                if ($item->variant_id) {
+                    // Check variant stock
+                    $variant = ProductVariant::find($item->variant_id);
+                    if (!$variant || $variant->stock < $item->quantity) {
+                        return back()->with('error', "Insufficient stock for {$item->product->name}. Only {$variant->stock} available.");
+                    }
+                } else {
+                    // Check product stock
+                    if ($item->product->stock < $item->quantity) {
+                        return back()->with('error', "Insufficient stock for {$item->product->name}. Only {$item->product->stock} available.");
+                    }
+                }
             }
             
             // Get shipping address
@@ -107,7 +125,7 @@ class PaymentController extends Controller
                 ];
             }
             
-            // ✅ FIXED: Store simplified cart items with vendor_id at top level
+            // Store simplified cart items with vendor_id
             $simplifiedCartItems = $cartItems->map(function($item) {
                 return [
                     'product_id' => $item->product_id,
@@ -117,7 +135,7 @@ class PaymentController extends Controller
                     'final_price' => $item->final_price,
                     'discount_type' => $item->discount_type ?? null,
                     'discount_value' => $item->discount_value ?? 0,
-                    'vendor_id' => $item->product->vendor_id,  // ✅ At top level!
+                    'vendor_id' => $item->product->vendor_id,
                     'product_name' => $item->product->name,
                 ];
             })->toArray();
@@ -127,7 +145,7 @@ class PaymentController extends Controller
                 'pending_order_data' => [
                     'address_id' => $request->address_id,
                     'notes' => $request->notes,
-                    'cart_items' => $simplifiedCartItems,  // ✅ Simplified structure
+                    'cart_items' => $simplifiedCartItems,
                     'subtotal' => $subtotal,
                     'tax' => $tax,
                     'coupon_discount' => $couponDiscount,
@@ -209,7 +227,7 @@ class PaymentController extends Controller
             DB::beginTransaction();
             
             try {
-                // ✅ FIXED: Group by vendor_id directly (not nested)
+                // Group by vendor_id
                 $cartItems = collect($orderData['cart_items']);
                 $itemsByVendor = $cartItems->groupBy('vendor_id');
                 
@@ -234,7 +252,7 @@ class PaymentController extends Controller
                     $vendorTax = ($vendorSubtotal - $vendorCouponDiscount) * 0.10;
                     $vendorTotal = $vendorSubtotal - $vendorCouponDiscount + $vendorTax;
                     
-                    // ✅ Create order with ALL required fields
+                    // Create order
                     $order = Order::create([
                         'user_id' => $user->id,
                         'vendor_id' => $vendorId,
@@ -249,7 +267,6 @@ class PaymentController extends Controller
                         'payment_status' => 'paid',
                         'transaction_id' => $session->payment_intent,
                         'notes' => $orderData['notes'] ?? null,
-                        // ✅ Address fields
                         'recipient_name' => $shippingAddress['recipient_name'],
                         'phone' => $shippingAddress['phone'],
                         'address_line' => $shippingAddress['address_line'],
@@ -267,8 +284,33 @@ class PaymentController extends Controller
                     
                     Log::info("Order created: {$order->order_number} for vendor $vendorId");
                     
-                    // ✅ Create order items with ALL required fields
+                    // Create order items and deduct stock
                     foreach ($vendorItems as $itemData) {
+                        // ✅ ADDED: Check and deduct stock
+                        if ($itemData['variant_id']) {
+                            // Deduct from variant stock
+                            $variant = ProductVariant::find($itemData['variant_id']);
+                            
+                            if (!$variant || $variant->stock < $itemData['quantity']) {
+                                throw new \Exception("Insufficient stock for product variant. Order cancelled.");
+                            }
+                            
+                            $variant->decrement('stock', $itemData['quantity']);
+                            Log::info("Stock deducted: Variant {$variant->id} - {$itemData['quantity']} units. Remaining: " . ($variant->stock - $itemData['quantity']));
+                            
+                        } else {
+                            // Deduct from product stock
+                            $product = Product::find($itemData['product_id']);
+                            
+                            if (!$product || $product->stock < $itemData['quantity']) {
+                                throw new \Exception("Insufficient stock for product. Order cancelled.");
+                            }
+                            
+                            $product->decrement('stock', $itemData['quantity']);
+                            Log::info("Stock deducted: Product {$product->id} - {$itemData['quantity']} units. Remaining: " . ($product->stock - $itemData['quantity']));
+                        }
+                        
+                        // Create order item
                         OrderItem::create([
                             'order_id' => $order->id,
                             'product_id' => $itemData['product_id'],
@@ -281,7 +323,7 @@ class PaymentController extends Controller
                         ]);
                     }
                     
-                    // ✅ Create payment record with CORRECT fields
+                    // Create payment record
                     Payment::create([
                         'order_id' => $order->id,
                         'payment_method' => 'card',
@@ -317,7 +359,6 @@ class PaymentController extends Controller
                 
                 DB::commit();
                 
-                // ✅ FIXED: Redirect with transaction_id to show ALL orders
                 return redirect()->route('payment.success', ['transaction_id' => $session->payment_intent])
                     ->with('success', 'Payment successful! Your order has been placed.');
                 
@@ -346,7 +387,7 @@ class PaymentController extends Controller
                 ->with('error', 'Invalid payment reference');
         }
         
-        // ✅ Load ALL orders with this transaction_id
+        // Load ALL orders with this transaction_id
         $orders = Order::with(['items.product', 'payment', 'vendor'])
             ->where('user_id', Auth::id())
             ->where('transaction_id', $transactionId)
