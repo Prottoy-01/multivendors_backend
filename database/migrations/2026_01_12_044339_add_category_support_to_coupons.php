@@ -11,14 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Step 1: Add applies_to_all column to coupons table
+        // Step 1: Add applies_to_all column to coupons table (if not exists)
         if (!Schema::hasColumn('coupons', 'applies_to_all')) {
             Schema::table('coupons', function (Blueprint $table) {
                 $table->boolean('applies_to_all')->default(true)->after('is_active');
             });
         }
         
-        // Step 2: Create coupon_category pivot table
+        // Step 2: Create coupon_category pivot table (if not exists)
         if (!Schema::hasTable('coupon_category')) {
             Schema::create('coupon_category', function (Blueprint $table) {
                 $table->id();
@@ -26,7 +26,12 @@ return new class extends Migration
                 $table->foreignId('category_id')->constrained('categories')->onDelete('cascade');
                 $table->timestamps();
                 
+                // Prevent duplicate entries
                 $table->unique(['coupon_id', 'category_id']);
+                
+                // Indexes for performance
+                $table->index('coupon_id');
+                $table->index('category_id');
             });
         }
     }
