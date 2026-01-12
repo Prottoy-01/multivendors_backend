@@ -69,7 +69,6 @@ Route::middleware('auth:sanctum')->group(function () {
     */
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::post('/profile', [ProfileController::class, 'update']);
-
     /*
     |----------------------------------------------------------------------
     | Reviews (Authenticated Users)

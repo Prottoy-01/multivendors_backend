@@ -120,46 +120,118 @@ class CustomerController extends Controller
     /**
      * Shopping cart
      */
-    public function cart()
-    {
-        $user = Auth::user();
-    
-     // Get or create cart (no total_amount column)
-     $cart = Cart::firstOrCreate(
-        ['user_id' => $user->id]
-     );
+   public function cart()
+{
+    $user = Auth::user();
 
-     // Get cart items with products AND variants ( UPDATED)
-     $cartItems = CartItem::where('cart_id', $cart->id)
+    $cart = Cart::firstOrCreate(
+        ['user_id' => $user->id]
+    );
+
+    // ✅ UPDATED: Load category for coupon checking
+    $cartItems = CartItem::where('cart_id', $cart->id)
         ->with([
             'product.images',
             'product.vendor',
-            'variant' //  ADD THIS LINE - loads variant data
+            'product.category', // ✅ NEW
+            'variant'
         ])
         ->get()
-        ->map(function($item) { //  ADD THIS MAPPING
-            // Add image URLs for display
+        ->map(function($item) {
             $item->product->image_urls = $item->product->images->map(
                 fn($img) => asset('storage/' . $img->image_path)
             );
             return $item;
-        }); //  END OF MAPPING
+        });
 
-     // Calculate totals using final_price (price after discount)
-     $subtotal = $cartItems->sum(function($item) {
+    $subtotal = $cartItems->sum(function($item) {
         return $item->quantity * $item->final_price;
     });
+
+    // ✅ NEW: Get available coupons
+    $availableCoupons = $this->getAvailableCoupons($cartItems, $user->id);
 
     $cart = [
         'id' => $cart->id,
         'items' => $cartItems->toArray(),
         'subtotal' => $subtotal,
-        'tax' => $subtotal * 0.1, // 10% tax
+        'tax' => $subtotal * 0.1,
         'total' => $subtotal + ($subtotal * 0.1),
     ];
 
-    return view('customer.cart', compact('cart'));
+    return view('customer.cart', compact('cart', 'availableCoupons'));
+}
+
+
+/**
+ * Get available coupons for cart items
+ */
+private function getAvailableCoupons($cartItems, $userId)
+{
+    if ($cartItems->isEmpty()) {
+        return [];
     }
+
+    // Get category IDs from cart items
+    $cartCategoryIds = $cartItems->pluck('product.category_id')->unique()->filter()->values();
+
+    // Get valid coupons
+    $coupons = Coupon::with('categories')
+        ->where('is_active', true)
+        ->where(function($q) {
+            $now = now();
+            $q->where(function($q2) use ($now) {
+                $q2->whereNull('valid_from')
+                   ->orWhere('valid_from', '<=', $now);
+            })
+            ->where(function($q2) use ($now) {
+                $q2->whereNull('valid_until')
+                   ->orWhere('valid_until', '>=', $now);
+            });
+        })
+        ->where(function($q) {
+            $q->whereNull('usage_limit')
+              ->orWhereColumn('usage_count', '<', 'usage_limit');
+        })
+        ->get()
+        ->filter(function($coupon) use ($userId, $cartCategoryIds) {
+            // Check per-user limit
+            $userUsageCount = CouponUsage::where([
+                'coupon_id' => $coupon->id,
+                'user_id' => $userId
+            ])->count();
+            
+            if ($userUsageCount >= $coupon->per_user_limit) {
+                return false;
+            }
+
+            // Check if coupon applies to cart items
+            if ($coupon->applies_to_all) {
+                return true;
+            }
+
+            // Check if any cart category matches coupon categories
+            $couponCategoryIds = $coupon->categories->pluck('id');
+            return $couponCategoryIds->intersect($cartCategoryIds)->isNotEmpty();
+        })
+        ->map(function($coupon) {
+            return [
+                'id' => $coupon->id,
+                'code' => $coupon->code,
+                'type' => $coupon->type,
+                'value' => $coupon->value,
+                'description' => $coupon->description,
+                'applies_to_all' => $coupon->applies_to_all,
+                'categories' => $coupon->categories->pluck('name')->toArray(),
+                'min_purchase' => $coupon->min_purchase,
+                'valid_until' => $coupon->valid_until?->format('M d, Y'),
+            ];
+        })
+        ->values()
+        ->toArray();
+
+    return $coupons;
+}
 
     /**
      * Add to cart
@@ -317,107 +389,133 @@ class CustomerController extends Controller
     }
 
   // apply copun
-    public function applyCoupon(Request $request)
-{
-    $request->validate([
-        'coupon_code' => 'required|string',
-    ]);
+  public function applyCoupon(Request $request)
+    {
+        $request->validate([
+            'coupon_code' => 'required|string',
+        ]);
 
-    $user = Auth::user();
-    $couponCode = strtoupper(trim($request->coupon_code));
-    
-    // Find coupon
-   // $coupon = Coupon::where('code', $couponCode)->first();
-   $coupon = Coupon::whereRaw('UPPER(code) = ?', [$couponCode])->first();
-    
-    if (!$coupon) {
+        $user = Auth::user();
+        $couponCode = strtoupper(trim($request->coupon_code));
+        
+        // Load coupon with categories
+        $coupon = Coupon::with('categories')->whereRaw('UPPER(code) = ?', [$couponCode])->first();
+        
+        if (!$coupon) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid coupon code.'
+            ], 422);
+        }
+        
+        if (!$coupon->isValid()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This coupon is no longer valid or has expired.'
+            ], 422);
+        }
+        
+        if (!$coupon->canBeUsedBy($user->id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You have already used this coupon the maximum number of times.'
+            ], 422);
+        }
+        
+        $cart = Cart::where('user_id', $user->id)->first();
+        if (!$cart) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your cart is empty.'
+            ], 422);
+        }
+        
+        // ✅ Load products with categories
+        $cartItems = CartItem::where('cart_id', $cart->id)
+            ->with('product.category')
+            ->get();
+        
+        if ($cartItems->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your cart is empty.'
+            ], 422);
+        }
+        
+        // ✅ NEW: Check if coupon applies to cart items
+        $applicableAmount = 0;
+        $applicableCount = 0;
+        
+        if ($coupon->applies_to_all) {
+            // Applies to all products - OLD BEHAVIOR
+            $applicableAmount = $cartItems->sum(function($item) {
+                return $item->quantity * $item->final_price;
+            });
+            $applicableCount = $cartItems->count();
+        } else {
+            // Check categories - NEW BEHAVIOR
+            $couponCategoryIds = $coupon->categories->pluck('id')->toArray();
+            
+            foreach ($cartItems as $item) {
+                if (in_array($item->product->category_id, $couponCategoryIds)) {
+                    $applicableAmount += $item->quantity * $item->final_price;
+                    $applicableCount++;
+                }
+            }
+            
+            if ($applicableCount == 0) {
+                $categoryNames = $coupon->categories->pluck('name')->join(', ');
+                return response()->json([
+                    'success' => false,
+                    'message' => "This coupon only applies to: {$categoryNames}"
+                ], 422);
+            }
+        }
+        
+        // Calculate discount on applicable amount
+        $discount = $coupon->calculateDiscount($applicableAmount);
+        
+        if ($discount == 0) {
+            $minPurchase = $coupon->min_purchase ? '$' . number_format($coupon->min_purchase, 2) : '';
+            return response()->json([
+                'success' => false,
+                'message' => $minPurchase ? "Minimum purchase of {$minPurchase} required for applicable items." : 'This coupon cannot be applied to your cart.'
+            ], 422);
+        }
+        
+        // Store coupon in session
+        session([
+            'applied_coupon' => [
+                'id' => $coupon->id,
+                'code' => $coupon->code,
+                'type' => $coupon->type,
+                'discount' => $discount,
+            ]
+        ]);
+        
+        // Calculate totals
+        $fullSubtotal = $cartItems->sum(function($item) {
+            return $item->quantity * $item->final_price;
+        });
+        $tax = $fullSubtotal * 0.10;
+        $total = $fullSubtotal - $discount + $tax;
+        
         return response()->json([
-            'success' => false,
-            'message' => 'Invalid coupon code.'
-        ], 422);
+            'success' => true,
+            'message' => 'Coupon applied successfully!',
+            'coupon' => [
+                'code' => $coupon->code,
+                'discount' => $discount,
+            ],
+            'totals' => [
+                'subtotal' => $fullSubtotal,
+                'discount' => $discount,
+                'tax' => $tax,
+                'total' => $total,
+            ]
+        ]);
     }
-    
-    // Check if coupon is valid
-    if (!$coupon->isValid()) {
-        return response()->json([
-            'success' => false,
-            'message' => 'This coupon is no longer valid or has expired.'
-        ], 422);
-    }
-    
-    // Check if user can use this coupon
-    if (!$coupon->canBeUsedBy($user->id)) {
-        return response()->json([
-            'success' => false,
-            'message' => 'You have already used this coupon the maximum number of times.'
-        ], 422);
-    }
-    
-    // Get cart to calculate discount
-    $cart = Cart::where('user_id', $user->id)->first();
-    if (!$cart) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Your cart is empty.'
-        ], 422);
-    }
-    
-    $cartItems = CartItem::where('cart_id', $cart->id)
-        ->with('product')
-        ->get();
-    
-    if ($cartItems->isEmpty()) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Your cart is empty.'
-        ], 422);
-    }
-    
-    // Calculate subtotal
-    $subtotal = $cartItems->sum(function($item) {
-        return $item->quantity * $item->final_price;
-    });
-    
-    // Calculate discount
-    $discount = $coupon->calculateDiscount($subtotal);
-    
-    if ($discount == 0) {
-        $minPurchase = $coupon->min_purchase ? '$' . number_format($coupon->min_purchase, 2) : '';
-        return response()->json([
-            'success' => false,
-            'message' => $minPurchase ? "Minimum purchase of {$minPurchase} required to use this coupon." : 'This coupon cannot be applied to your cart.'
-        ], 422);
-    }
-    
-    // Store coupon in session
-    session([
-        'applied_coupon' => [
-            'id' => $coupon->id,
-            'code' => $coupon->code,
-            'type' => $coupon->type,
-            'discount' => $discount,
-        ]
-    ]);
-    
-    // Calculate new totals
-    $tax = $subtotal * 0.10;
-    $total = $subtotal - $discount + $tax;
-    
-    return response()->json([
-        'success' => true,
-        'message' => 'Coupon applied successfully!',
-        'coupon' => [
-            'code' => $coupon->code,
-            'discount' => $discount,
-        ],
-        'totals' => [
-            'subtotal' => $subtotal,
-            'discount' => $discount,
-            'tax' => $tax,
-            'total' => $total,
-        ]
-    ]);
-}
+
 
 /**
  * Remove applied coupon
@@ -436,7 +534,10 @@ public function removeCoupon()
     /**
      * Checkout page
      */
-   public function checkout()
+/**
+ * Checkout page - UPDATED with available coupons
+ */
+public function checkout()
 {
     $user = Auth::user();
     
@@ -446,8 +547,9 @@ public function removeCoupon()
         return redirect()->route('customer.cart')->with('error', 'Your cart is empty');
     }
 
+    // ✅ UPDATED: Load with category for coupon checking
     $cartItems = CartItem::where('cart_id', $cart->id)
-        ->with(['product.images', 'product.vendor', 'variant'])
+        ->with(['product.images', 'product.vendor', 'product.category', 'variant']) // ✅ Added category
         ->get();
 
     // Calculate subtotal
@@ -455,11 +557,14 @@ public function removeCoupon()
         return $item->quantity * $item->final_price;
     });
     
-    //  Get applied coupon from session
+    // ✅ NEW: Get available coupons for checkout page
+    $availableCoupons = $this->getAvailableCoupons($cartItems, $user->id);
+    
+    // Get applied coupon from session
     $appliedCoupon = session('applied_coupon');
     $couponDiscount = 0;
     
-    //  Validate coupon is still valid if applied
+    // Validate coupon is still valid if applied
     if ($appliedCoupon) {
         $coupon = Coupon::find($appliedCoupon['id']);
         if (!$coupon || !$coupon->isValid()) {
@@ -467,18 +572,8 @@ public function removeCoupon()
             session()->forget('applied_coupon');
             $appliedCoupon = null;
         } else {
-            // Recalculate discount based on current subtotal
-            $couponDiscount = $coupon->calculateDiscount($subtotal);
-            
-            // Update session with recalculated discount
-            if ($couponDiscount > 0) {
-                session(['applied_coupon.discount' => $couponDiscount]);
-                $appliedCoupon['discount'] = $couponDiscount;
-            } else {
-                // Minimum purchase no longer met
-                session()->forget('applied_coupon');
-                $appliedCoupon = null;
-            }
+            // ✅ UPDATED: Use the discount from session (already calculated correctly)
+            $couponDiscount = $appliedCoupon['discount'];
         }
     }
 
@@ -489,14 +584,15 @@ public function removeCoupon()
         'id' => $cart->id,
         'items' => $cartItems->toArray(),
         'subtotal' => $subtotal,
-        'coupon_discount' => $couponDiscount,  //  ADD
+        'coupon_discount' => $couponDiscount,
         'tax' => $tax,
         'total' => $total,
     ];
 
     $addresses = UserAddress::where('user_id', $user->id)->get()->toArray();
 
-    return view('customer.checkout', compact('cart', 'addresses', 'appliedCoupon'));
+    // ✅ UPDATED: Pass availableCoupons to view
+    return view('customer.checkout', compact('cart', 'addresses', 'appliedCoupon', 'availableCoupons'));
 }
 
 

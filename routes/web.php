@@ -117,6 +117,15 @@ Route::middleware(['auth', \App\Http\Middleware\AdminMiddleware::class])->prefix
     Route::put('/categories/{id}', [AdminController::class, 'updateCategory'])->name('categories.update');
     Route::delete('/categories/{id}', [AdminController::class, 'deleteCategory'])->name('categories.destroy');
     Route::get('/orders', [AdminController::class, 'orders'])->name('orders');
-    Route::get('/coupons', [AdminController::class, 'coupons'])->name('coupons');
-    Route::post('/coupons', [AdminController::class, 'storeCoupon'])->name('coupons.store');
+   // Route::get('/coupons', [AdminController::class, 'coupons'])->name('coupons');
+   // Route::post('/coupons', [AdminController::class, 'storeCoupon'])->name('coupons.store');
+
+
+
+    // Coupons management - UPDATED
+Route::get('/coupons', [AdminController::class, 'coupons'])->name('coupons');
+Route::post('/coupons', [AdminController::class, 'storeCoupon'])->name('coupons.store');
+Route::put('/coupons/{id}', [AdminController::class, 'updateCoupon'])->name('coupons.update'); // ✅ NEW
+Route::post('/coupons/{id}/toggle', [AdminController::class, 'toggleCoupon'])->name('coupons.toggle'); // ✅ NEW
+Route::delete('/coupons/{id}', [AdminController::class, 'deleteCoupon'])->name('coupons.delete'); // ✅ NEW
 });

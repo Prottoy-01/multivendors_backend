@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Web;
 
-use Illuminate\Support\Facades\Storage; // ✅ Add this at the top with other imports
+use Illuminate\Support\Facades\Storage;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Vendor;
@@ -34,7 +34,7 @@ class AdminController extends Controller
             'today_revenue' => Order::where('payment_status', 'paid')
                 ->whereDate('created_at', today())
                 ->sum('total_amount'),
-            'pending_vendors' => Vendor::where('status', 'pending')->count(), // ✅ FIXED THIS LINE
+            'pending_vendors' => Vendor::where('status', 'pending')->count(),
         ];
 
         return view('admin.dashboard', compact('overview'));
@@ -49,70 +49,64 @@ class AdminController extends Controller
         return view('admin.users', compact('users'));
     }
 
+    /**
+     * Activate user
+     */
+    public function activateUser($id)
+    {
+        $user = User::findOrFail($id);
+        
+        if ($user->id === auth()->id()) {
+            return redirect()->back()->with('error', 'You cannot change your own status!');
+        }
+        
+        $user->status = 'active';
+        $user->save();
+
+        return redirect()->back()->with('success', 'User activated successfully!');
+    }
 
     /**
- * Activate user
- */
-public function activateUser($id)
-{
-    $user = User::findOrFail($id);
-    
-    // Prevent admin from changing their own status
-    if ($user->id === auth()->id()) {
-        return redirect()->back()->with('error', 'You cannot change your own status!');
-    }
-    
-    $user->status = 'active';
-    $user->save();
+     * Suspend user
+     */
+    public function suspendUser($id)
+    {
+        $user = User::findOrFail($id);
+        
+        if ($user->id === auth()->id()) {
+            return redirect()->back()->with('error', 'You cannot change your own status!');
+        }
+        
+        if ($user->role === 'admin') {
+            return redirect()->back()->with('error', 'You cannot suspend another admin!');
+        }
+        
+        $user->status = 'suspended';
+        $user->save();
 
-    return redirect()->back()->with('success', 'User activated successfully!');
-}
-
-/**
- * Suspend user
- */
-public function suspendUser($id)
-{
-    $user = User::findOrFail($id);
-    
-    // Prevent admin from changing their own status
-    if ($user->id === auth()->id()) {
-        return redirect()->back()->with('error', 'You cannot change your own status!');
+        return redirect()->back()->with('success', 'User suspended successfully!');
     }
-    
-    // Prevent suspending other admins
-    if ($user->role === 'admin') {
-        return redirect()->back()->with('error', 'You cannot suspend another admin!');
-    }
-    
-    $user->status = 'suspended';
-    $user->save();
 
-    return redirect()->back()->with('success', 'User suspended successfully!');
-}
+    /**
+     * Ban user
+     */
+    public function banUser($id)
+    {
+        $user = User::findOrFail($id);
+        
+        if ($user->id === auth()->id()) {
+            return redirect()->back()->with('error', 'You cannot change your own status!');
+        }
+        
+        if ($user->role === 'admin') {
+            return redirect()->back()->with('error', 'You cannot ban another admin!');
+        }
+        
+        $user->status = 'banned';
+        $user->save();
 
-/**
- * Ban user
- */
-public function banUser($id)
-{
-    $user = User::findOrFail($id);
-    
-    // Prevent admin from changing their own status
-    if ($user->id === auth()->id()) {
-        return redirect()->back()->with('error', 'You cannot change your own status!');
+        return redirect()->back()->with('success', 'User banned successfully!');
     }
-    
-    // Prevent banning other admins
-    if ($user->role === 'admin') {
-        return redirect()->back()->with('error', 'You cannot ban another admin!');
-    }
-    
-    $user->status = 'banned';
-    $user->save();
-
-    return redirect()->back()->with('success', 'User banned successfully!');
-}
 
     /**
      * Vendors list
@@ -129,64 +123,64 @@ public function banUser($id)
     public function approveVendor($id)
     {
         $vendor = Vendor::findOrFail($id);
-        $vendor->status = 'approved'; // ✅ Using 'status' column
+        $vendor->status = 'approved';
         $vendor->save();
 
         return redirect()->back()->with('success', 'Vendor approved successfully!');
     }
 
     /**
- * Reject vendor
- */
-public function rejectVendor($id)
-{
-    $vendor = Vendor::findOrFail($id);
-    $vendor->status = 'rejected';
-    $vendor->save();
+     * Reject vendor
+     */
+    public function rejectVendor($id)
+    {
+        $vendor = Vendor::findOrFail($id);
+        $vendor->status = 'rejected';
+        $vendor->save();
 
-    return redirect()->back()->with('success', 'Vendor rejected successfully!');
-}
-/**
- * Show vendor details
- */
-public function vendorDetails($id)
-{
-    $vendor = Vendor::with(['user', 'products.category', 'products.images'])
-        ->findOrFail($id);
-    
-    $vendor = $vendor->toArray();
-    
-    // Get vendor statistics
-    $productIds = Product::where('vendor_id', $id)->pluck('id');
-    
-    $stats = [
-        'total_products' => Product::where('vendor_id', $id)->count(),
-        'total_orders' => Order::whereHas('items', function($q) use ($productIds) {
-            $q->whereIn('product_id', $productIds);
-        })->count(),
-        'total_revenue' => OrderItem::whereIn('product_id', $productIds)
+        return redirect()->back()->with('success', 'Vendor rejected successfully!');
+    }
+
+    /**
+     * Show vendor details
+     */
+    public function vendorDetails($id)
+    {
+        $vendor = Vendor::with(['user', 'products.category', 'products.images'])
+            ->findOrFail($id);
+        
+        $vendor = $vendor->toArray();
+        
+        $productIds = Product::where('vendor_id', $id)->pluck('id');
+        
+        $stats = [
+            'total_products' => Product::where('vendor_id', $id)->count(),
+            'total_orders' => Order::whereHas('items', function($q) use ($productIds) {
+                $q->whereIn('product_id', $productIds);
+            })->count(),
+            'total_revenue' => OrderItem::whereIn('product_id', $productIds)
+                ->get()
+                ->sum(function($item) {
+                    return $item->quantity * $item->final_price;
+                }),
+            'pending_orders' => Order::whereHas('items', function($q) use ($productIds) {
+                $q->whereIn('product_id', $productIds);
+            })->where('status', 'pending')->count(),
+            'completed_orders' => Order::whereHas('items', function($q) use ($productIds) {
+                $q->whereIn('product_id', $productIds);
+            })->where('status', 'delivered')->count(),
+        ];
+        
+        $products = Product::where('vendor_id', $id)
+            ->with(['category', 'images'])
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
             ->get()
-            ->sum(function($item) {
-                return $item->quantity * $item->final_price;
-            }),
-        'pending_orders' => Order::whereHas('items', function($q) use ($productIds) {
-            $q->whereIn('product_id', $productIds);
-        })->where('status', 'pending')->count(),
-        'completed_orders' => Order::whereHas('items', function($q) use ($productIds) {
-            $q->whereIn('product_id', $productIds);
-        })->where('status', 'delivered')->count(),
-    ];
-    
-    // Get recent products
-    $products = Product::where('vendor_id', $id)
-        ->with(['category', 'images'])
-        ->orderBy('created_at', 'desc')
-        ->limit(10)
-        ->get()
-        ->toArray();
+            ->toArray();
 
-    return view('admin.vendor-details', compact('vendor', 'stats', 'products'));
-}
+        return view('admin.vendor-details', compact('vendor', 'stats', 'products'));
+    }
+
     /**
      * Categories management
      */
@@ -234,7 +228,6 @@ public function vendorDetails($id)
     {
         $category = Category::findOrFail($id);
         
-        // Check if category has products
         if ($category->products()->count() > 0) {
             return redirect()->back()->with('error', 'Cannot delete category with products!');
         }
@@ -258,16 +251,32 @@ public function vendorDetails($id)
     }
 
     /**
-     * Coupons list
+     * ========================================
+     * COUPONS - UPDATED FOR CATEGORY SUPPORT
+     * ========================================
+     */
+    
+    /**
+     * Coupons list - Load with categories
      */
     public function coupons()
     {
-        $coupons = Coupon::orderBy('created_at', 'desc')->get()->toArray();
-        return view('admin.coupons', compact('coupons'));
+        // ✅ NEW: Load coupons with categories relationship
+        $coupons = Coupon::with('categories')
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->toArray();
+        
+        // ✅ NEW: Get all categories for the form
+        $categories = Category::orderBy('name')
+            ->get()
+            ->toArray();
+        
+        return view('admin.coupons', compact('coupons', 'categories'));
     }
 
     /**
-     * Store coupon
+     * Store coupon - With category support
      */
     public function storeCoupon(Request $request)
     {
@@ -278,45 +287,118 @@ public function vendorDetails($id)
             'min_purchase' => 'nullable|numeric|min:0',
             'max_discount' => 'nullable|numeric|min:0',
             'usage_limit' => 'nullable|integer|min:1',
-            'per_user_limit' => 'nullable|integer|min:1', // ✅✅✅ ADD THIS LINE ✅✅✅
+            'per_user_limit' => 'nullable|integer|min:1',
             'valid_from' => 'required|date',
             'valid_until' => 'required|date|after:valid_from',
+            'applies_to_all' => 'required|boolean', // ✅ NEW
+            'category_ids' => 'required_if:applies_to_all,false|array', // ✅ NEW
+            'category_ids.*' => 'exists:categories,id', // ✅ NEW
         ]);
 
-       // Coupon::create($request->all());
-       $data = $request->all();
-    $data['code'] = strtoupper($request->code);
-    // ✅✅✅ END FIX ✅✅✅
-    
-// ✅ ADD THIS: Ensure per_user_limit has a value
-if (!isset($data['per_user_limit']) || $data['per_user_limit'] < 1) {
-    $data['per_user_limit'] = 5; // Default: 5 uses per customer
-}
+        $data = $request->all();
+        $data['code'] = strtoupper($request->code);
+        
+        // Ensure per_user_limit has a value
+        if (!isset($data['per_user_limit']) || $data['per_user_limit'] < 1) {
+            $data['per_user_limit'] = 5;
+        }
+        
+        // Set created_by to current admin
+        $data['created_by'] = auth()->id();
 
-
-
-    Coupon::create($data);
+        // ✅ NEW: Create coupon
+        $coupon = Coupon::create($data);
+        
+        // ✅ NEW: Attach categories if not applies_to_all
+        if (!$request->applies_to_all && !empty($request->category_ids)) {
+            $coupon->categories()->attach($request->category_ids);
+        }
 
         return redirect()->back()->with('success', 'Coupon created successfully!');
     }
 
     /**
- * Delete product (Admin)
- */
-public function deleteProduct($id)
-{
-    $product = Product::with('images')->findOrFail($id);
-    
-    // Delete all product images from storage
-    foreach ($product->images as $image) {
-        Storage::disk('public')->delete($image->image_path);
-        $image->delete();
+     * ✅ NEW: Update coupon
+     */
+    public function updateCoupon(Request $request, $id)
+    {
+        $coupon = Coupon::findOrFail($id);
+        
+        $request->validate([
+            'is_active' => 'sometimes|boolean',
+            'usage_limit' => 'sometimes|integer|min:0',
+            'valid_until' => 'sometimes|date',
+            'applies_to_all' => 'sometimes|boolean',
+            'category_ids' => 'sometimes|array',
+            'category_ids.*' => 'exists:categories,id',
+        ]);
+        
+        // Update basic fields
+        $coupon->update($request->only([
+            'is_active', 'usage_limit', 'valid_until', 'applies_to_all'
+        ]));
+        
+        // Update categories if provided
+        if ($request->has('category_ids')) {
+            if ($request->applies_to_all) {
+                // If applies to all, remove all category associations
+                $coupon->categories()->detach();
+            } else {
+                // Sync categories
+                $coupon->categories()->sync($request->category_ids);
+            }
+        }
+        
+        return redirect()->back()->with('success', 'Coupon updated successfully!');
     }
-    
-    // Delete the product
-    $product->delete();
-    
-    return redirect()->route('products.index')
-        ->with('success', 'Product deleted successfully by admin!');
-}
+
+    /**
+     * ✅ NEW: Toggle coupon active status
+     */
+    public function toggleCoupon($id)
+    {
+        $coupon = Coupon::findOrFail($id);
+        $coupon->is_active = !$coupon->is_active;
+        $coupon->save();
+        
+        $status = $coupon->is_active ? 'activated' : 'deactivated';
+        return redirect()->back()->with('success', "Coupon {$status} successfully!");
+    }
+
+    /**
+     * ✅ NEW: Delete coupon
+     */
+    public function deleteCoupon($id)
+    {
+        $coupon = Coupon::findOrFail($id);
+        
+        // Only delete if not used
+        if ($coupon->usage_count > 0) {
+            return redirect()->back()->with('error', 'Cannot delete coupon that has been used. Deactivate it instead.');
+        }
+        
+        $coupon->delete();
+        
+        return redirect()->back()->with('success', 'Coupon deleted successfully!');
+    }
+
+    /**
+     * Delete product (Admin)
+     */
+    public function deleteProduct($id)
+    {
+        $product = Product::with('images')->findOrFail($id);
+        
+        // Delete all product images from storage
+        foreach ($product->images as $image) {
+            Storage::disk('public')->delete($image->image_path);
+            $image->delete();
+        }
+        
+        // Delete the product
+        $product->delete();
+        
+        return redirect()->route('products.index')
+            ->with('success', 'Product deleted successfully by admin!');
+    }
 }

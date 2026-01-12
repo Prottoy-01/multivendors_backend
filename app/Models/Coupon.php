@@ -22,6 +22,7 @@ class Coupon extends Model
         'valid_from',
         'valid_until',
         'is_active',
+        'applies_to_all', // NEW: If true, applies to all products
         'created_by',
         'description',
     ];
@@ -31,6 +32,7 @@ class Coupon extends Model
         'min_purchase' => 'decimal:2',
         'max_discount' => 'decimal:2',
         'is_active' => 'boolean',
+        'applies_to_all' => 'boolean', // NEW
         'valid_from' => 'datetime',
         'valid_until' => 'datetime',
         'usage_limit' => 'integer',
@@ -44,6 +46,15 @@ class Coupon extends Model
     const TYPE_PERCENTAGE = 'percentage';
     const TYPE_FIXED = 'fixed';
     const TYPE_FREE_SHIPPING = 'free_shipping';
+
+    /**
+     * NEW: Coupon belongs to many categories
+     */
+    public function categories()
+    {
+        return $this->belongsToMany(Category::class, 'coupon_category')
+                    ->withTimestamps();
+    }
 
     /**
      * Coupon has many usages
@@ -104,6 +115,46 @@ class Coupon extends Model
             ->count();
 
         return $userUsageCount < $this->per_user_limit;
+    }
+
+    /**
+     * NEW: Check if coupon applies to a specific product
+     */
+    public function appliesToProduct($product)
+    {
+        // If applies to all products, return true
+        if ($this->applies_to_all) {
+            return true;
+        }
+
+        // Check if product's category is in coupon's categories
+        $categoryIds = $this->categories->pluck('id')->toArray();
+        
+        return in_array($product->category_id, $categoryIds);
+    }
+
+    /**
+     * NEW: Check if coupon applies to cart items
+     * Returns array of applicable items and total applicable amount
+     */
+    public function getApplicableCartItems($cartItems)
+    {
+        $applicableItems = [];
+        $applicableAmount = 0;
+
+        foreach ($cartItems as $item) {
+            // Check if this item's product is applicable
+            if ($this->appliesToProduct($item->product)) {
+                $applicableItems[] = $item;
+                $applicableAmount += $item->product->final_price * $item->quantity;
+            }
+        }
+
+        return [
+            'items' => $applicableItems,
+            'amount' => $applicableAmount,
+            'count' => count($applicableItems)
+        ];
     }
 
     /**

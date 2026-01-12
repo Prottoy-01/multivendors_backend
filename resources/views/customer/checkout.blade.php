@@ -132,7 +132,7 @@
                     </div>
                 </div>
 
-                {{-- ✅✅✅ YOUR COUPON CODE SECTION (PRESERVED) ✅✅✅ --}}
+                {{-- ✅✅✅ UPDATED: COUPON CODE SECTION WITH CATEGORY SUPPORT ✅✅✅ --}}
                 <div class="card mb-3">
                     <div class="card-header bg-warning text-dark">
                         <h5 class="mb-0"><i class="fas fa-ticket-alt"></i> Have a Coupon Code?</h5>
@@ -146,7 +146,12 @@
                                         <i class="fas fa-check-circle"></i>
                                         <strong>{{ $appliedCoupon['code'] }}</strong> applied!
                                         <br>
-                                        <small>You're saving ${{ number_format($appliedCoupon['discount'], 2) }}</small>
+                                        <small>
+                                            You're saving ${{ number_format($appliedCoupon['discount'], 2) }}
+                                            @if(!empty($appliedCoupon['applicable_items_count']))
+                                                ({{ $appliedCoupon['applicable_items_count'] }} item(s))
+                                            @endif
+                                        </small>
                                     </div>
                                     <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeCoupon()">
                                         <i class="fas fa-times"></i> Remove
@@ -169,44 +174,67 @@
                                     </div>
                                     <div id="coupon-message"></div>
                                     
-                                    {{-- Show Available Coupons --}}
-                                    <div class="mt-2">
+                                    {{-- ✅ UPDATED: Show Available Coupons from Controller --}}
+                                    @if(!empty($availableCoupons) && count($availableCoupons) > 0)
+                                    <div class="mt-3">
                                         <small class="text-muted">
-                                            <i class="fas fa-info-circle"></i> Available coupons:
+                                            <i class="fas fa-gift"></i> <strong>Available coupons for your cart:</strong>
                                         </small>
                                         <div class="mt-2">
-                                            @php
-                                                $availableCoupons = \App\Models\Coupon::valid()
-                                                    ->where(function($q) {
-                                                        $q->whereNull('usage_limit')
-                                                          ->orWhereRaw('usage_count < usage_limit');
-                                                    })
-                                                    ->limit(3)
-                                                    ->get();
-                                            @endphp
-                                            
-                                            @forelse($availableCoupons as $coupon)
-                                                <span class="badge bg-warning text-dark me-2 mb-2" 
-                                                      style="cursor: pointer;" 
-                                                      onclick="document.getElementById('coupon-code-input').value = '{{ $coupon->code }}'">
-                                                    {{ $coupon->code }} 
-                                                    @if($coupon->type === 'percentage')
-                                                        ({{ $coupon->value }}% OFF)
-                                                    @else
-                                                        (${{ $coupon->value }} OFF)
+                                            @foreach($availableCoupons as $coupon)
+                                                <div class="badge-coupon-container mb-2">
+                                                    <span class="badge bg-warning text-dark me-2" 
+                                                          style="cursor: pointer; padding: 8px 12px; font-size: 0.9rem;" 
+                                                          onclick="document.getElementById('coupon-code-input').value = '{{ $coupon['code'] }}'; applyCoupon();"
+                                                          title="Click to apply">
+                                                        <i class="fas fa-tag"></i> {{ $coupon['code'] }} 
+                                                        @if($coupon['type'] === 'percentage')
+                                                            ({{ $coupon['value'] }}% OFF)
+                                                        @else
+                                                            (${{ $coupon['value'] }} OFF)
+                                                        @endif
+                                                    </span>
+                                                    
+                                                    {{-- Show applicable categories --}}
+                                                    @if(!$coupon['applies_to_all'] && !empty($coupon['categories']))
+                                                        <br>
+                                                        <small class="text-muted ms-2">
+                                                            <i class="fas fa-arrow-right"></i> Applies to: 
+                                                            @foreach($coupon['categories'] as $category)
+                                                                <span class="badge bg-secondary">{{ $category }}</span>
+                                                            @endforeach
+                                                        </small>
+                                                    @elseif($coupon['applies_to_all'])
+                                                        <br>
+                                                        <small class="text-success ms-2">
+                                                            <i class="fas fa-check"></i> All products
+                                                        </small>
                                                     @endif
-                                                </span>
-                                            @empty
-                                                <small class="text-muted">No coupons available at this time.</small>
-                                            @endforelse
+                                                    
+                                                    {{-- Show min purchase if exists --}}
+                                                    @if($coupon['min_purchase'])
+                                                        <br>
+                                                        <small class="text-muted ms-2">
+                                                            <i class="fas fa-shopping-cart"></i> Min: ${{ number_format($coupon['min_purchase'], 2) }}
+                                                        </small>
+                                                    @endif
+                                                </div>
+                                            @endforeach
                                         </div>
                                     </div>
+                                    @else
+                                        <div class="mt-2">
+                                            <small class="text-muted">
+                                                <i class="fas fa-info-circle"></i> No coupons available for items in your cart.
+                                            </small>
+                                        </div>
+                                    @endif
                                 </div>
                             @endif
                         </div>
                     </div>
                 </div>
-                {{-- ✅✅✅ END: YOUR COUPON CODE SECTION ✅✅✅ --}}
+                {{-- ✅✅✅ END: UPDATED COUPON CODE SECTION ✅✅✅ --}}
 
                 <!-- Order Notes -->
                 <div class="card">
@@ -424,4 +452,20 @@ document.getElementById('place-order-btn').addEventListener('click', function() 
     }
 });
 </script>
+
+<style>
+.badge-coupon-container {
+    display: inline-block;
+    vertical-align: top;
+}
+
+.badge-coupon-container .badge {
+    transition: all 0.2s ease;
+}
+
+.badge-coupon-container .badge:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+</style>
 @endsection
