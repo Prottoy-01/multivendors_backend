@@ -645,7 +645,7 @@ public function placeOrder(Request $request)
             return $item->quantity * $item->final_price;
         });
         
-        //  Get applied coupon from session
+        // Get applied coupon from session
         $appliedCoupon = session('applied_coupon');
         $coupon = null;
         $couponDiscount = 0;
@@ -664,10 +664,11 @@ public function placeOrder(Request $request)
         $shippingCost = 0;
         $grandTotal = $totalAmount - $couponDiscount + $taxAmount + $shippingCost;
 
-        // Create order
+        // ✅ FIXED: Create order with order_number
         $order = Order::create([
             'user_id' => $user->id,
             'vendor_id' => $vendorId,
+            'order_number' => 'ORD-' . strtoupper(uniqid()),  // ✅ ADDED THIS LINE
             'total_amount' => $totalAmount,
             'discount_total' => $discountTotal,
             'coupon_id' => $coupon ? $coupon->id : null,
@@ -718,7 +719,7 @@ public function placeOrder(Request $request)
             }
         }
         
-        //  Record coupon usage
+        // Record coupon usage
         if ($coupon) {
             CouponUsage::create([
                 'coupon_id' => $coupon->id,
@@ -734,7 +735,7 @@ public function placeOrder(Request $request)
     // Clear cart
     CartItem::where('cart_id', $cart->id)->delete();
     
-    //  Clear applied coupon from session
+    // Clear applied coupon from session
     session()->forget('applied_coupon');
 
     return redirect()->route('customer.orders')->with('success', 'Order placed successfully!');

@@ -7,6 +7,8 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Cart;
 use App\Models\CartItem;
+use App\Models\Coupon;
+use App\Models\CouponUsage;
 use App\Models\OrderItem;
 use App\Models\UserAddress;
 use App\Models\Product;
@@ -21,7 +23,7 @@ use Stripe\Checkout\Session as StripeSession;
 class PaymentController extends Controller
 {
     /**
-     * Create Stripe Checkout Session (Redirect Method)
+     * ✅ FIXED: Create Stripe Checkout Session with Coupon Support
      */
     public function createCheckoutSession(Request $request)
     {
@@ -42,16 +44,14 @@ class PaymentController extends Controller
                 return back()->with('error', 'Cart is empty');
             }
             
-            // ✅ ADDED: Check stock availability before checkout
+            // Check stock availability
             foreach ($cartItems as $item) {
                 if ($item->variant_id) {
-                    // Check variant stock
                     $variant = ProductVariant::find($item->variant_id);
                     if (!$variant || $variant->stock < $item->quantity) {
                         return back()->with('error', "Insufficient stock for {$item->product->name}. Only {$variant->stock} available.");
                     }
                 } else {
-                    // Check product stock
                     if ($item->product->stock < $item->quantity) {
                         return back()->with('error', "Insufficient stock for {$item->product->name}. Only {$item->product->stock} available.");
                     }
@@ -67,65 +67,94 @@ class PaymentController extends Controller
                 return back()->with('error', 'Please select a shipping address');
             }
             
-            // Calculate totals
+            // Calculate subtotal
             $subtotal = $cartItems->sum(function($item) {
                 return $item->quantity * $item->final_price;
             });
             
-            // Get coupon discount
+            // Get coupon info from session
             $couponDiscount = 0;
+            $couponId = null;
+            $couponCode = null;
             $appliedCoupon = session('applied_coupon');
+            
             if ($appliedCoupon) {
-                $couponDiscount = $appliedCoupon['discount'];
+                $couponDiscount = floatval($appliedCoupon['discount'] ?? 0);
+                $couponId = $appliedCoupon['id'] ?? null;
+                $couponCode = $appliedCoupon['code'] ?? null;
             }
             
-            $tax = ($subtotal - $couponDiscount) * 0.10;
-            $total = $subtotal - $couponDiscount + $tax;
+            // Calculate final amounts
+            $subtotalAfterDiscount = max(0, $subtotal - $couponDiscount);
+            $tax = $subtotalAfterDiscount * 0.10;
+            $total = $subtotalAfterDiscount + $tax;
+            
+            // Validate total is positive
+            if ($total <= 0) {
+                return back()->with('error', 'Invalid order total. Please try again.');
+            }
             
             // Set Stripe API key
             Stripe::setApiKey(config('services.stripe.secret'));
             
-            // Prepare line items for Stripe
+            // ✅ BUILD LINE ITEMS - Stripe doesn't allow negative amounts!
             $lineItems = [];
-            foreach ($cartItems as $item) {
-                $lineItems[] = [
-                    'price_data' => [
-                        'currency' => 'usd',
-                        'product_data' => [
-                            'name' => $item->product->name,
-                            'description' => 'Product from ' . config('app.name'),
+            
+            if ($couponDiscount > 0 && $subtotal > 0) {
+                // Apply discount proportionally to each item
+                foreach ($cartItems as $item) {
+                    $itemTotal = $item->quantity * $item->final_price;
+                    $itemDiscountRatio = $itemTotal / $subtotal;
+                    $itemDiscount = $couponDiscount * $itemDiscountRatio;
+                    $itemPriceAfterDiscount = ($itemTotal - $itemDiscount) / $item->quantity;
+                    
+                    // Ensure price is positive and at least 1 cent
+                    $finalUnitPrice = max(0.01, $itemPriceAfterDiscount);
+                    
+                    $lineItems[] = [
+                        'price_data' => [
+                            'currency' => 'usd',
+                            'product_data' => [
+                                'name' => $item->product->name,
+                                'description' => $couponCode ? "Discount applied: {$couponCode}" : 'Product',
+                            ],
+                            'unit_amount' => (int)round($finalUnitPrice * 100),
                         ],
-                        'unit_amount' => round($item->final_price * 100),
-                    ],
-                    'quantity' => $item->quantity,
-                ];
+                        'quantity' => $item->quantity,
+                    ];
+                }
+            } else {
+                // No discount - use regular prices
+                foreach ($cartItems as $item) {
+                    $lineItems[] = [
+                        'price_data' => [
+                            'currency' => 'usd',
+                            'product_data' => [
+                                'name' => $item->product->name,
+                                'description' => 'Product',
+                            ],
+                            'unit_amount' => (int)round($item->final_price * 100),
+                        ],
+                        'quantity' => $item->quantity,
+                    ];
+                }
             }
             
-            // Add tax
+            // Add tax as separate line item
             if ($tax > 0) {
                 $lineItems[] = [
                     'price_data' => [
                         'currency' => 'usd',
-                        'product_data' => ['name' => 'Tax (10%)'],
-                        'unit_amount' => round($tax * 100),
+                        'product_data' => [
+                            'name' => 'Tax (10%)',
+                        ],
+                        'unit_amount' => (int)round($tax * 100),
                     ],
                     'quantity' => 1,
                 ];
             }
             
-            // Add discount
-            if ($couponDiscount > 0) {
-                $lineItems[] = [
-                    'price_data' => [
-                        'currency' => 'usd',
-                        'product_data' => ['name' => 'Coupon Discount'],
-                        'unit_amount' => -round($couponDiscount * 100),
-                    ],
-                    'quantity' => 1,
-                ];
-            }
-            
-            // Store simplified cart items with vendor_id
+            // Store cart data for order creation after payment
             $simplifiedCartItems = $cartItems->map(function($item) {
                 return [
                     'product_id' => $item->product_id,
@@ -144,10 +173,12 @@ class PaymentController extends Controller
             session([
                 'pending_order_data' => [
                     'address_id' => $request->address_id,
-                    'notes' => $request->notes,
+                    'notes' => $request->notes ?? null,
                     'cart_items' => $simplifiedCartItems,
                     'subtotal' => $subtotal,
                     'tax' => $tax,
+                    'coupon_id' => $couponId,
+                    'coupon_code' => $couponCode,
                     'coupon_discount' => $couponDiscount,
                     'total' => $total,
                     'shipping_address' => [
@@ -163,7 +194,7 @@ class PaymentController extends Controller
             ]);
             
             // Create Stripe Checkout Session
-            $session = StripeSession::create([
+            $sessionData = [
                 'payment_method_types' => ['card'],
                 'line_items' => $lineItems,
                 'mode' => 'payment',
@@ -174,19 +205,29 @@ class PaymentController extends Controller
                     'user_id' => $user->id,
                     'address_id' => $request->address_id,
                 ],
-            ]);
+            ];
+            
+            // Add coupon info to metadata if exists
+            if ($couponCode) {
+                $sessionData['metadata']['coupon_code'] = $couponCode;
+                $sessionData['metadata']['coupon_discount'] = $couponDiscount;
+            }
+            
+            $session = StripeSession::create($sessionData);
             
             return redirect($session->url);
             
         } catch (\Exception $e) {
             Log::error('Stripe Checkout Error: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
+            
             return redirect()->route('payment.failed')
-                ->with('error', 'Payment processing error. Please try again.');
+                ->with('error', 'Payment processing error: ' . $e->getMessage());
         }
     }
     
     /**
-     * Handle successful payment from Stripe Checkout
+     * ✅ FIXED: Handle successful payment from Stripe
      */
     public function handleSuccess(Request $request)
     {
@@ -227,23 +268,20 @@ class PaymentController extends Controller
             DB::beginTransaction();
             
             try {
-                // Group by vendor_id
+                // Group items by vendor
                 $cartItems = collect($orderData['cart_items']);
                 $itemsByVendor = $cartItems->groupBy('vendor_id');
-                
-                Log::info('Multi-vendor grouping: ' . $itemsByVendor->count() . ' vendors found');
                 
                 $allOrders = [];
                 $firstOrder = null;
                 
                 foreach ($itemsByVendor as $vendorId => $vendorItems) {
-                    Log::info("Processing vendor: $vendorId with " . $vendorItems->count() . " items");
-                    
-                    // Calculate totals
+                    // Calculate vendor totals
                     $vendorSubtotal = $vendorItems->sum(function($item) {
                         return $item['quantity'] * $item['final_price'];
                     });
                     
+                    // Apply coupon discount proportionally
                     $vendorCouponDiscount = 0;
                     if ($orderData['coupon_discount'] > 0 && $orderData['subtotal'] > 0) {
                         $vendorCouponDiscount = ($vendorSubtotal / $orderData['subtotal']) * $orderData['coupon_discount'];
@@ -260,6 +298,7 @@ class PaymentController extends Controller
                         'total_amount' => $vendorSubtotal,
                         'tax_amount' => $vendorTax,
                         'shipping_cost' => 0,
+                        'coupon_id' => $orderData['coupon_id'] ?? null,
                         'coupon_discount' => $vendorCouponDiscount,
                         'grand_total' => $vendorTotal,
                         'status' => 'pending',
@@ -282,32 +321,19 @@ class PaymentController extends Controller
                     
                     $allOrders[] = $order;
                     
-                    Log::info("Order created: {$order->order_number} for vendor $vendorId");
-                    
                     // Create order items and deduct stock
                     foreach ($vendorItems as $itemData) {
-                        // ✅ ADDED: Check and deduct stock
+                        // Deduct stock
                         if ($itemData['variant_id']) {
-                            // Deduct from variant stock
                             $variant = ProductVariant::find($itemData['variant_id']);
-                            
-                            if (!$variant || $variant->stock < $itemData['quantity']) {
-                                throw new \Exception("Insufficient stock for product variant. Order cancelled.");
+                            if ($variant && $variant->stock >= $itemData['quantity']) {
+                                $variant->decrement('stock', $itemData['quantity']);
                             }
-                            
-                            $variant->decrement('stock', $itemData['quantity']);
-                            Log::info("Stock deducted: Variant {$variant->id} - {$itemData['quantity']} units. Remaining: " . ($variant->stock - $itemData['quantity']));
-                            
                         } else {
-                            // Deduct from product stock
                             $product = Product::find($itemData['product_id']);
-                            
-                            if (!$product || $product->stock < $itemData['quantity']) {
-                                throw new \Exception("Insufficient stock for product. Order cancelled.");
+                            if ($product && $product->stock >= $itemData['quantity']) {
+                                $product->decrement('stock', $itemData['quantity']);
                             }
-                            
-                            $product->decrement('stock', $itemData['quantity']);
-                            Log::info("Stock deducted: Product {$product->id} - {$itemData['quantity']} units. Remaining: " . ($product->stock - $itemData['quantity']));
                         }
                         
                         // Create order item
@@ -337,16 +363,26 @@ class PaymentController extends Controller
                             'payment_intent' => $session->payment_intent,
                             'payment_status' => $session->payment_status,
                             'vendor_id' => $vendorId,
-                            'vendor_amount' => $vendorTotal,
-                            'platform_fee' => 0,
-                            'net_vendor_amount' => $vendorTotal,
+                            'coupon_discount' => $vendorCouponDiscount,
                         ]),
                     ]);
-                    
-                    Log::info("Payment record created for order: {$order->id}");
                 }
                 
-                Log::info("Total orders created: " . count($allOrders));
+                // Record coupon usage (only once for main order)
+                if (!empty($orderData['coupon_id']) && $orderData['coupon_discount'] > 0 && $firstOrder) {
+                    $coupon = Coupon::find($orderData['coupon_id']);
+                    
+                    if ($coupon) {
+                        CouponUsage::create([
+                            'coupon_id' => $coupon->id,
+                            'user_id' => $user->id,
+                            'order_id' => $firstOrder->id,
+                            'discount_amount' => $orderData['coupon_discount'],
+                        ]);
+                        
+                        $coupon->increment('usage_count');
+                    }
+                }
                 
                 // Clear cart
                 $cart = Cart::where('user_id', $user->id)->first();
@@ -371,12 +407,12 @@ class PaymentController extends Controller
         } catch (\Exception $e) {
             Log::error('Stripe Success Error: ' . $e->getMessage());
             return redirect()->route('payment.failed')
-                ->with('error', 'Error: ' . $e->getMessage());
+                ->with('error', 'Error processing your order: ' . $e->getMessage());
         }
     }
     
     /**
-     * Payment success page - Shows ALL orders from multi-vendor payment
+     * Payment success page
      */
     public function success(Request $request)
     {
@@ -387,7 +423,6 @@ class PaymentController extends Controller
                 ->with('error', 'Invalid payment reference');
         }
         
-        // Load ALL orders with this transaction_id
         $orders = Order::with(['items.product', 'payment', 'vendor'])
             ->where('user_id', Auth::id())
             ->where('transaction_id', $transactionId)
@@ -398,10 +433,8 @@ class PaymentController extends Controller
                 ->with('error', 'Orders not found');
         }
         
-        // Calculate totals across all orders
         $totalAmount = $orders->sum('grand_total');
         
-        // Get shipping address from first order (same for all)
         $shippingAddress = [
             'recipient_name' => $orders->first()->recipient_name,
             'phone' => $orders->first()->phone,

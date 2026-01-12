@@ -186,7 +186,7 @@
                                                name="applies_to_all" 
                                                id="applies_to_all_yes" 
                                                value="1"
-                                               {{ old('applies_to_all', '0') == '1' ? 'checked' : '' }}
+                                               {{ old('applies_to_all', '1') == '1' ? 'checked' : '' }}
                                                onchange="toggleCategorySelector()">
                                         <label class="form-check-label" for="applies_to_all_yes">
                                             <strong>Apply to ALL Products</strong>
@@ -200,7 +200,7 @@
                                                name="applies_to_all" 
                                                id="applies_to_all_no" 
                                                value="0"
-                                               {{ old('applies_to_all', '0') == '0' ? 'checked' : '' }}
+                                               {{ old('applies_to_all', '1') == '0' ? 'checked' : '' }}
                                                onchange="toggleCategorySelector()">
                                         <label class="form-check-label" for="applies_to_all_no">
                                             <strong>Specific Categories Only</strong>
@@ -210,7 +210,7 @@
                                 </div>
                                 
                                 {{-- Category Checkboxes --}}
-                                <div id="category-selector" style="{{ old('applies_to_all', '0') == '1' ? 'display: none;' : '' }}">
+                                <div id="category-selector" style="{{ old('applies_to_all', '1') == '1' ? 'display: none;' : '' }}">
                                     <label class="form-label">
                                         Select Categories <span class="text-danger">*</span>
                                     </label>
