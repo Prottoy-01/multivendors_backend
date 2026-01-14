@@ -33,6 +33,8 @@ class User extends Authenticatable
     'role',
     'google_id',
     'auth_provider',
+    'wallet_balance',
+
     ];
 
     /**
@@ -43,6 +45,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'wallet_balance' => 'decimal:2',
     ];
 
     /**

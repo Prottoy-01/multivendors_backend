@@ -56,6 +56,10 @@ Route::post('/remove-coupon', [CustomerController::class, 'removeCoupon'])->name
     Route::post('/addresses', [CustomerController::class, 'storeAddress'])->name('addresses.store');
     Route::post('/reviews', [CustomerController::class, 'storeReview'])->name('reviews.store');
 
+    // In routes/web.php:
+Route::post('/orders/{id}/cancel', [CustomerController::class, 'cancelOrder'])->name('orders.cancel');
+    Route::get('/wallet', [CustomerController::class, 'wallet'])->name('wallet');
+
     //add payment route
     // Payment routes
 // Route::post('/payment/stripe', [CustomerController::class, 'processStripePayment'])->name('payment.stripe');

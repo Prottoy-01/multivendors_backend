@@ -9,7 +9,7 @@
             <a href="{{ route('customer.orders') }}" class="btn btn-outline-secondary mb-3">
                 <i class="fas fa-arrow-left"></i> Back to Orders
             </a>
-            <h2><i class="fas fa-receipt"></i> Order #{{ $order['id'] }}</h2>
+            <h2><i class="fas fa-receipt"></i> Order #{{ $order['order_number'] ?? $order['id'] }}</h2>
             <p class="text-muted">Order placed on {{ date('F d, Y \a\t h:i A', strtotime($order['created_at'])) }}</p>
         </div>
     </div>
@@ -161,6 +161,14 @@
                         <span>Subtotal:</span>
                         <strong>${{ number_format($order['total_amount'] ?? 0, 2) }}</strong>
                     </div>
+                    
+                    @if(isset($order['coupon_discount']) && $order['coupon_discount'] > 0)
+                    <div class="d-flex justify-content-between mb-2 text-success">
+                        <span><i class="fas fa-tag"></i> Coupon Discount:</span>
+                        <strong>-${{ number_format($order['coupon_discount'], 2) }}</strong>
+                    </div>
+                    @endif
+                    
                     <div class="d-flex justify-content-between mb-2">
                         <span>Tax:</span>
                         <strong>${{ number_format($order['tax_amount'] ?? 0, 2) }}</strong>
@@ -177,11 +185,45 @@
                         <h4 class="text-success mb-0">${{ number_format($order['grand_total'], 2) }}</h4>
                     </div>
 
+                    {{-- ✅ UPDATED: Cancel Order Section --}}
                     <div class="d-grid gap-2">
-                        @if(in_array($order['status'], ['pending', 'processing']))
-                            <button class="btn btn-outline-danger" disabled>
+                        @if($order['status'] !== 'cancelled' && $order['status'] !== 'delivered')
+                            {{-- Show enabled cancel button if order can be cancelled --}}
+                            <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#cancelOrderModal">
                                 <i class="fas fa-times"></i> Cancel Order
                             </button>
+                            
+                            {{-- Show refund info based on current status --}}
+                            <div class="alert alert-info mb-0 mt-2 py-2">
+                                <small>
+                                    @if($order['status'] === 'shipped')
+                                        <i class="fas fa-info-circle"></i> 
+                                        <strong>Note:</strong> Cancelling after shipping = 40% refund. Vendor retains 60% for shipping costs.
+                                    @else
+                                        <i class="fas fa-info-circle"></i> 
+                                        <strong>Note:</strong> You will receive 100% refund if cancelled before shipping.
+                                    @endif
+                                </small>
+                            </div>
+                        @elseif($order['status'] === 'delivered')
+                            <button class="btn btn-outline-danger" disabled>
+                                <i class="fas fa-times"></i> Cannot Cancel (Delivered)
+                            </button>
+                        @else
+                            <button class="btn btn-outline-danger" disabled>
+                                <i class="fas fa-times"></i> Order Cancelled
+                            </button>
+                            
+                            {{-- Show refund info if cancelled --}}
+                            @if(isset($order['cancellation']))
+                            <div class="alert alert-success mb-0 mt-2 py-2">
+                                <small>
+                                    <i class="fas fa-check-circle"></i> 
+                                    <strong>Refund:</strong> ${{ number_format($order['cancellation']['refund_amount'], 2) }} 
+                                    ({{ $order['cancellation']['refund_percentage'] }}%) added to wallet
+                                </small>
+                            </div>
+                            @endif
                         @endif
                     </div>
                 </div>
@@ -272,7 +314,7 @@
                             @endif
                             <div>
                                 <strong>{{ $item['product']['name'] }}</strong><br>
-                                <small class="text-muted">Order #{{ $order['id'] }}</small>
+                                <small class="text-muted">Order #{{ $order['order_number'] ?? $order['id'] }}</small>
                             </div>
                         </div>
 
@@ -341,6 +383,105 @@
     @endforeach
 @endif
 
+{{-- ✅ NEW: Cancel Order Modal --}}
+@if($order['status'] !== 'cancelled' && $order['status'] !== 'delivered')
+<div class="modal fade" id="cancelOrderModal" tabindex="-1" aria-labelledby="cancelOrderModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="{{ route('customer.orders.cancel', $order['id']) }}" method="POST">
+                @csrf
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title" id="cancelOrderModalLabel">
+                        <i class="fas fa-exclamation-triangle"></i> Cancel Order
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <strong>Order #{{ $order['order_number'] ?? $order['id'] }}</strong><br>
+                        <small>Current Status: <span class="badge bg-secondary">{{ ucfirst($order['status']) }}</span></small>
+                    </div>
+
+                    {{-- Show refund information based on order status --}}
+                    @if($order['status'] === 'shipped')
+                        <div class="alert alert-info">
+                            <h6 class="alert-heading">
+                                <i class="fas fa-info-circle"></i> Partial Refund Policy
+                            </h6>
+                            <p class="mb-2">Since this order has been <strong>shipped</strong>, the following refund policy applies:</p>
+                            <div class="row text-center mb-2">
+                                <div class="col-6">
+                                    <div class="p-2 bg-success text-white rounded">
+                                        <small>You Receive</small>
+                                        <h5 class="mb-0">40%</h5>
+                                        <strong>${{ number_format($order['grand_total'] * 0.40, 2) }}</strong>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="p-2 bg-secondary text-white rounded">
+                                        <small>Vendor Keeps</small>
+                                        <h5 class="mb-0">60%</h5>
+                                        <strong>${{ number_format($order['grand_total'] * 0.60, 2) }}</strong>
+                                    </div>
+                                </div>
+                            </div>
+                            <hr>
+                            <p class="mb-0 small">
+                                <i class="fas fa-truck"></i> The vendor retention (60%) covers shipping and handling costs already incurred.
+                            </p>
+                        </div>
+                    @else
+                        <div class="alert alert-success">
+                            <h6 class="alert-heading">
+                                <i class="fas fa-check-circle"></i> Full Refund Available
+                            </h6>
+                            <p class="mb-2">Since this order has not been shipped yet, you will receive:</p>
+                            <div class="text-center p-3 bg-success text-white rounded">
+                                <h4 class="mb-0">100% Full Refund</h4>
+                                <h3 class="mb-0">${{ number_format($order['grand_total'], 2) }}</h3>
+                            </div>
+                        </div>
+                    @endif
+
+                    <div class="mb-3">
+                        <label for="cancellation_reason" class="form-label">
+                            Reason for Cancellation <small class="text-muted">(Optional)</small>
+                        </label>
+                        <textarea 
+                            class="form-control" 
+                            id="cancellation_reason" 
+                            name="cancellation_reason" 
+                            rows="3"
+                            placeholder="Please tell us why you're cancelling this order... This helps us improve our service."
+                        ></textarea>
+                    </div>
+
+                    <div class="alert alert-light border mb-0">
+                        <p class="mb-2">
+                            <i class="fas fa-wallet text-primary"></i> 
+                            <strong>Refund Method:</strong>
+                        </p>
+                        <p class="mb-0 small">
+                            The refund amount will be instantly added to your <strong>Wallet Balance</strong> and can be used for future purchases.
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-arrow-left"></i> No, Keep Order
+                    </button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-times-circle"></i> Yes, Cancel Order
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+@endif
+
 {{-- CSS for Star Rating --}}
 <style>
 /* Star Rating Styles */
@@ -373,6 +514,15 @@
 
 .rating-stars label:hover {
     transform: scale(1.1);
+}
+
+/* Timeline styles */
+.timeline {
+    position: relative;
+}
+
+.timeline .fas {
+    margin-right: 8px;
 }
 </style>
 @endsection

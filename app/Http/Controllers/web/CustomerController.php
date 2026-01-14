@@ -15,6 +15,10 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\ProductVariant; //  ADD THIS
 use App\Models\Coupon;//new
 use App\Models\CouponUsage;//new
+use App\Models\OrderCancellation;
+use App\Models\Payment;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class CustomerController extends Controller
 {
@@ -718,7 +722,12 @@ public function placeOrder(Request $request)
                 $product->save();
             }
         }
-        
+
+        $vendor = Vendor::find($vendorId);
+        if ($vendor) {
+            $vendor->total_earnings += $grandTotal;
+            $vendor->save();
+        }
         // Record coupon usage
         if ($coupon) {
             CouponUsage::create([
@@ -875,5 +884,150 @@ public function storeReview(Request $request)
     ]);
 
     return redirect()->back()->with('success', 'Thank you for your review!');
+}
+
+
+/**
+ * Cancel Order with Partial Refund System + Vendor Earnings Adjustment
+ * REPLACE THE EXISTING cancelOrder() METHOD IN CustomerController
+ */
+public function cancelOrder(Request $request, $id)
+{
+    $request->validate([
+        'cancellation_reason' => 'nullable|string|max:500',
+    ]);
+
+    $user = Auth::user();
+    
+    // Get order with all relationships
+    $order = Order::where('user_id', $user->id)
+        ->where('id', $id)
+        ->with(['payment', 'vendor'])
+        ->firstOrFail();
+
+    // Check if order can be cancelled
+    if (!$order->canBeCancelledByCustomer()) {
+        return back()->with('error', 'This order cannot be cancelled at this stage.');
+    }
+
+    // Check if already cancelled
+    if ($order->isCancelled()) {
+        return back()->with('error', 'This order is already cancelled.');
+    }
+
+    DB::beginTransaction();
+    
+    try {
+        // Calculate refund based on order status
+        $refundPercentage = $order->getRefundPercentage();
+        $refundAmount = $order->calculateRefundAmount();
+        $vendorRetention = $order->grand_total - $refundAmount;
+
+        // Save current status before cancelling
+        $statusAtCancellation = $order->status;
+
+        // Create cancellation record
+        $cancellation = OrderCancellation::create([
+            'order_id' => $order->id,
+            'user_id' => $user->id,
+            'cancelled_by' => 'customer',
+            'cancellation_reason' => $request->cancellation_reason,
+            'order_status_at_cancellation' => $statusAtCancellation,
+            'original_amount' => $order->grand_total,
+            'refund_amount' => $refundAmount,
+            'refund_percentage' => $refundPercentage,
+            'vendor_retention' => $vendorRetention,
+            'refund_status' => OrderCancellation::REFUND_PENDING,
+        ]);
+
+        // Update order status to cancelled
+        $order->status = Order::STATUS_CANCELLED;
+        $order->save();
+
+        // ✅ NEW: Adjust Vendor Earnings
+        // Vendor loses the refunded amount from their total earnings
+        if ($refundAmount > 0 && $order->vendor) {
+            // Deduct the refund amount from vendor's total earnings
+            // Vendor keeps only the retention amount
+            $order->vendor->total_earnings -= $refundAmount;
+            $order->vendor->save();
+        }
+
+        // Process refund to customer
+        if ($refundAmount > 0) {
+            // Add refund amount to customer's wallet
+            $user->wallet_balance += $refundAmount;
+            $user->save();
+
+            // Update cancellation record
+            $cancellation->refund_status = OrderCancellation::REFUND_COMPLETED;
+            $cancellation->refund_processed_at = now();
+            $cancellation->save();
+
+            // Update payment status if exists
+            if ($order->payment) {
+                $order->payment->update([
+                    'status' => Payment::STATUS_REFUNDED,
+                ]);
+            }
+        }
+
+        // Restore stock for cancelled items
+        foreach ($order->items as $item) {
+            if ($item->variant_id) {
+                // Restore variant stock
+                $variant = ProductVariant::find($item->variant_id);
+                if ($variant) {
+                    $variant->increment('stock', $item->quantity);
+                }
+            } else {
+                // Restore product stock
+                $product = Product::find($item->product_id);
+                if ($product) {
+                    $product->increment('stock', $item->quantity);
+                }
+            }
+        }
+
+        DB::commit();
+
+        // Prepare success message
+        $message = 'Order cancelled successfully. ';
+        
+        if ($refundAmount > 0) {
+            if ($refundPercentage == 100) {
+                $message .= "Full refund of $" . number_format($refundAmount, 2) . " has been added to your wallet.";
+            } else {
+                $message .= "Partial refund of $" . number_format($refundAmount, 2) . " ({$refundPercentage}%) has been added to your wallet. ";
+                $message .= "The vendor retains $" . number_format($vendorRetention, 2) . " as the order was already shipped.";
+            }
+        }
+
+        return redirect()->route('customer.orders')
+            ->with('success', $message);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Order Cancellation Error: ' . $e->getMessage());
+        
+        return back()->with('error', 'Failed to cancel order. Please try again or contact support.');
+    }
+}
+
+/**
+ * Show Customer Wallet
+ */
+public function wallet()
+{
+    $user = Auth::user();
+    
+    // Get all refunds (cancelled orders where user got refund)
+    $refunds = OrderCancellation::where('user_id', $user->id)
+        ->where('refund_status', OrderCancellation::REFUND_COMPLETED)
+        ->with('order')
+        ->orderBy('created_at', 'desc')
+        ->get();
+
+    return view('customer.wallet', compact('refunds'));
 }
 }

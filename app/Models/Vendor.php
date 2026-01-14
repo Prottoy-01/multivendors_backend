@@ -10,7 +10,13 @@ class Vendor extends Model
         'user_id',
         'shop_name',
         'status',
-        'commission_percentage'
+        'commission_percentage',
+        'total_earnings'
+    ];
+
+    protected $casts = [
+        'commission_percentage' => 'decimal:2',
+        'total_earnings' => 'decimal:2',  // ✅ ADDED
     ];
 
     public function user()
@@ -21,5 +27,10 @@ class Vendor extends Model
     public function products()
     {
         return $this->hasMany(Product::class);
+    }
+
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
     }
 }
