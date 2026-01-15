@@ -12,11 +12,12 @@ use App\Models\UserAddress;
 use App\Models\Review;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Models\ProductVariant; //  ADD THIS
-use App\Models\Coupon;//new
-use App\Models\CouponUsage;//new
+use App\Models\ProductVariant;
+use App\Models\Coupon;
+use App\Models\CouponUsage;
 use App\Models\OrderCancellation;
 use App\Models\Payment;
+use App\Models\Vendor; // ⭐ ADDED - Required for vendor earnings
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -723,11 +724,10 @@ public function placeOrder(Request $request)
             }
         }
 
-        $vendor = Vendor::find($vendorId);
-        if ($vendor) {
-            $vendor->total_earnings += $grandTotal;
-            $vendor->save();
-        }
+        // ⭐ REMOVED: Vendor earnings should NOT be added here
+        // Earnings are added when order status is changed to "shipped"
+        // See VendorController::updateOrderStatus() method
+        
         // Record coupon usage
         if ($coupon) {
             CouponUsage::create([
