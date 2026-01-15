@@ -13,13 +13,11 @@
                 <a href="{{ route('products.index') }}" class="btn btn-primary btn-lg">
                     <i class="fas fa-shopping-bag"></i> Shop Now
                 </a>
-                <a href="{{ route('vendor.register') }}" class="btn btn-outline-primary btn-lg ms-2">
+                <a href="{{ route('vendor.register') }}" class="btn btn-primary btn-lg">
                     <i class="fas fa-store"></i> Become a Vendor
                 </a>
             </div>
-            <div class="col-md-6">
-                <img src="https://via.placeholder.com/500x400?text=Shop+Now" alt="Hero" class="img-fluid rounded">
-            </div>
+            
         </div>
     </div>
 

@@ -27,12 +27,13 @@ class VendorController extends Controller
         $productIds = Product::where('vendor_id', $vendor->id)->pluck('id');
         
         // Calculate total revenue using price * quantity
-        $totalRevenue = OrderItem::whereIn('product_id', $productIds)
+         $totalRevenue = OrderItem::whereIn('product_id', $productIds)
             ->get()
-            ->sum(function($item) {
-                return $item->quantity * $item->final_price;
-            });
-        
+             ->sum(function($item) {
+                 return $item->quantity * $item->final_price;
+             });
+       // $totalRevenue = $vendor->total_earnings;
+
         // Get analytics
         $analytics = [
             'total_products' => Product::where('vendor_id', $vendor->id)->count(),

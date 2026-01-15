@@ -156,6 +156,10 @@ class OrderController extends Controller
 
     /**
      * Vendor/Admin: Update order status
+     * 
+     * ⭐ KEY CHANGE: Vendor earnings are now tracked when order is SHIPPED
+     * This is the critical point where revenue enters the vendor dashboard
+     * If order is later cancelled, the refund will be deducted
      */
     public function updateStatus(Request $request, $id)
     {
@@ -163,10 +167,61 @@ class OrderController extends Controller
             'status' => 'required|in:paid,processing,shipped,delivered,cancelled'
         ]);
 
-        $order = Order::findOrFail($id);
-        $order->status = $request->status;
-        $order->save();
-
-        return response()->json(['message' => 'Order status updated']);
+        $order = Order::with('vendor')->findOrFail($id);
+        $oldStatus = $order->status;
+        $newStatus = $request->status;
+        
+        DB::beginTransaction();
+        
+        try {
+            // Update order status
+            $order->status = $newStatus;
+            $order->save();
+            
+            // ⭐⭐⭐ CRITICAL FIX: Track vendor earnings when order is SHIPPED
+            // This ensures the revenue shows in vendor dashboard immediately
+            // When customer cancels after shipping, the 40% refund will be deducted from this
+            if ($oldStatus !== Order::STATUS_SHIPPED && $newStatus === Order::STATUS_SHIPPED) {
+                $vendor = $order->vendor;
+                $orderAmount = $order->grand_total ?? $order->total_amount;
+                
+                // Add to vendor's total_earnings
+                $vendor->increment('total_earnings', $orderAmount);
+                
+                Log::info('Vendor earnings updated on order shipped', [
+                    'order_id' => $order->id,
+                    'vendor_id' => $vendor->id,
+                    'amount_added' => $orderAmount,
+                    'new_total_earnings' => $vendor->fresh()->total_earnings,
+                    'timestamp' => now()
+                ]);
+            }
+            
+            DB::commit();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Order status updated successfully',
+                'data' => [
+                    'order_id' => $order->id,
+                    'old_status' => $oldStatus,
+                    'new_status' => $newStatus
+                ]
+            ]);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Order status update failed', [
+                'order_id' => $id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update order status: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

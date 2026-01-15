@@ -14,6 +14,7 @@ use App\Http\Controllers\API\WishlistController;
 use App\Http\Controllers\API\CouponController;
 use App\Http\Controllers\API\VendorDashboardController;
 use App\Http\Controllers\API\AdminDashboardController;
+use App\Http\Controllers\API\OrderCancellationController;
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\VendorMiddleware;
 
@@ -111,6 +112,11 @@ Route::middleware('auth:sanctum')->group(function () {
     */
     Route::post('/checkout', [OrderController::class, 'placeOrder']);
     Route::get('/orders', [OrderController::class, 'myOrders']);
+    
+    // Order Cancellation
+    Route::post('/orders/{orderId}/cancel', [OrderCancellationController::class, 'cancelOrder']);
+    Route::get('/orders/{orderId}/cancellation', [OrderCancellationController::class, 'getCancellationDetails']);
+    Route::get('/orders/{orderId}/cancellation/check', [OrderCancellationController::class, 'checkCancellationEligibility']);
 
     /*
     |----------------------------------------------------------------------
@@ -149,6 +155,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Review Moderation
         Route::put('/admin/reviews/{id}/moderate', [ReviewController::class, 'moderate']);
+        
+        // Admin Cancellations
+        Route::get('/admin/cancellations', [OrderCancellationController::class, 'adminCancellations']);
     });
 
     /*
@@ -173,5 +182,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/vendor/dashboard/analytics', [VendorDashboardController::class, 'analytics']);
         Route::get('/vendor/dashboard/orders', [VendorDashboardController::class, 'recentOrders']);
         Route::get('/vendor/dashboard/products', [VendorDashboardController::class, 'products']);
+        
+        // Vendor Cancellations
+        Route::get('/vendor/cancellations', [OrderCancellationController::class, 'vendorCancellations']);
     });
 });
