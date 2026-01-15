@@ -148,6 +148,8 @@ class AuthController extends Controller
             'password' => Hash::make($request->password),
             'role' => 'vendor',
             'status' => 'active', // ✅ Set default status
+            'phone' => $request->phone,
+            
         ]);
 
         // Create vendor profile
