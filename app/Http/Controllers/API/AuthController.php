@@ -25,6 +25,7 @@ class AuthController extends Controller
             'password' => 'required|string|min:6',
             'role' => 'required|in:customer,vendor,admin',
             'phone' => 'nullable|string|max:20',
+            
         ]);
 
         $user = User::create([
@@ -173,7 +174,8 @@ if (!$user || !$user->password || !Hash::check($request->password, $user->passwo
             'name' => 'required|string|max:100',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:6',
-            'shop_name' => 'required|string|max:150'
+            'shop_name' => 'required|string|max:150',
+            'phone' => 'required|string|max:20' // ✅ ADD
         ]);
 
         $user = User::create([
@@ -181,6 +183,7 @@ if (!$user || !$user->password || !Hash::check($request->password, $user->passwo
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role' => 'vendor',
+            'phone' => $request->phone, // ✅ ADD
         ]);
 
         $vendor = Vendor::create([

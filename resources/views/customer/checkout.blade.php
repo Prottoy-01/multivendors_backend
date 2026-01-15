@@ -115,20 +115,7 @@
                             </label>
                         </div>
                         
-                        <div class="form-check p-3 border rounded">
-                            <input class="form-check-input" type="radio" name="payment_method" 
-                                   id="bank" value="bank_transfer">
-                            <label class="form-check-label w-100" for="bank">
-                                <div class="d-flex align-items-center">
-                                    <i class="fas fa-university fa-2x text-info me-3"></i>
-                                    <div>
-                                        <strong>Bank Transfer</strong>
-                                        <br>
-                                        <small class="text-muted">Direct bank account transfer</small>
-                                    </div>
-                                </div>
-                            </label>
-                        </div>
+                       
                     </div>
                 </div>
 

@@ -11,7 +11,9 @@ class Vendor extends Model
         'shop_name',
         'status',
         'commission_percentage',
-        'total_earnings'
+        'total_earnings',
+        'address'  ,// ✅ ADD THIS
+        
     ];
 
     protected $casts = [
