@@ -112,6 +112,7 @@
                 </div>
                 <div class="card-body">
                     <div class="row">
+                        <!-- Row 1: Main Management -->
                         <div class="col-md-3 mb-3">
                             <a href="{{ route('admin.users') }}" class="btn btn-outline-primary w-100 py-3">
                                 <i class="fas fa-users fa-2x d-block mb-2"></i>
@@ -134,6 +135,14 @@
                             <a href="{{ route('admin.orders') }}" class="btn btn-outline-info w-100 py-3">
                                 <i class="fas fa-shopping-cart fa-2x d-block mb-2"></i>
                                 View Orders
+                            </a>
+                        </div>
+                        
+                        <!-- Row 2: Additional Features -->
+                        <div class="col-md-3 mb-3">
+                            <a href="{{ route('admin.coupons') }}" class="btn btn-outline-danger w-100 py-3">
+                                <i class="fas fa-ticket-alt fa-2x d-block mb-2"></i>
+                                Manage Coupons
                             </a>
                         </div>
                     </div>

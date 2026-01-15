@@ -242,7 +242,8 @@ class AdminController extends Controller
      */
     public function orders()
     {
-        $orders = Order::with(['user', 'items.product', 'items.vendor'])
+        // Load order vendor AND product vendors through items
+        $orders = Order::with(['user', 'vendor', 'items.product.vendor'])
             ->orderBy('created_at', 'desc')
             ->get()
             ->toArray();

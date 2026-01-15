@@ -30,6 +30,11 @@ class OrderItem extends Model
         return $this->belongsTo(Product::class);
     }
 
+    /**
+     * Get the vendor through the product relationship
+     * Note: Use product.vendor for eager loading, not items.vendor
+     */
+
     public function variant()
     {
         return $this->belongsTo(ProductVariant::class, 'variant_id');
