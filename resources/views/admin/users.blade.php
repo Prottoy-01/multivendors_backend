@@ -37,6 +37,7 @@
                             <th>ID</th>
                             <th>Name</th>
                             <th>Email</th>
+                            <th>Phone</th>
                             <th>Role</th>
                             <th>Status</th>
                             <th>Joined Date</th>
@@ -54,6 +55,7 @@
                                 @endif
                             </td>
                             <td>{{ $user['email'] }}</td>
+                            <td>{{ $user['phone'] ?? 'N/A' }}</td>
                             <td>
                                 @if($user['role'] === 'admin')
                                     <span class="badge bg-danger">
@@ -148,7 +150,7 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="7" class="text-center text-muted py-4">
+                            <td colspan="8" class="text-center text-muted py-4">
                                 <i class="fas fa-users-slash fa-3x mb-3"></i>
                                 <p>No users found</p>
                             </td>
