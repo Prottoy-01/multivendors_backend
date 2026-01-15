@@ -67,12 +67,14 @@
                             <h6>Customer Information:</h6>
                             <p class="mb-1"><strong>Name:</strong> {{ $order['user']['name'] ?? 'N/A' }}</p>
                             <p class="mb-1"><strong>Email:</strong> {{ $order['user']['email'] ?? 'N/A' }}</p>
+                            <p class="mb-1"><strong>Phone:</strong> {{ $order['phone'] ?? 'N/A' }}</p>
                             
                             <h6 class="mt-3">Shipping Address:</h6>
                             <p class="mb-0">
-                                {{ $order['shipping_address'] ?? 'N/A' }}<br>
-                                {{ $order['shipping_city'] ?? '' }}, {{ $order['shipping_state'] ?? '' }} {{ $order['shipping_postal_code'] ?? '' }}<br>
-                                {{ $order['shipping_country'] ?? '' }}
+                                <strong>Recipient:</strong> {{ $order['recipient_name'] ?? 'N/A' }}<br>
+                                {{ $order['address_line'] ?? 'N/A' }}<br>
+                                {{ $order['city'] ?? '' }}@if($order['state'] ?? ''), {{ $order['state'] }}@endif {{ $order['postal_code'] ?? '' }}<br>
+                                {{ $order['country'] ?? '' }}
                             </p>
                         </div>
 
