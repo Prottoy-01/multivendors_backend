@@ -13,6 +13,9 @@ class Vendor extends Model
         'commission_percentage',
         'total_earnings',
         'address'  ,// ✅ ADD THIS
+
+        'shop_description', // ⭐ ADDED
+    'phone',            // ⭐ ADDED
         
     ];
 
