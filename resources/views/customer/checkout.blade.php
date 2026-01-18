@@ -39,7 +39,7 @@
                     <div class="card-body">
                         @if(count($addresses) > 0)
                             @foreach($addresses as $address)
-                            <div class="form-check mb-3 p-3 border rounded {{ $loop->first ? 'border-primary' : '' }}">
+                            <div class="form-check mb-3 p-3 border rounded address-option" id="address-option-{{ $address['id'] }}">
                                 <input class="form-check-input" type="radio" name="address_id" 
                                        id="address{{ $address['id'] }}" value="{{ $address['id'] }}" 
                                        {{ $loop->first ? 'checked' : '' }} required>
@@ -85,7 +85,7 @@
                         <h5 class="mb-0"><i class="fas fa-credit-card"></i> Payment Method</h5>
                     </div>
                     <div class="card-body">
-                        <div class="form-check mb-3 p-3 border rounded border-primary">
+                        <div class="form-check mb-3 p-3 border rounded payment-option" id="payment-cod">
                             <input class="form-check-input" type="radio" name="payment_method" 
                                    id="cod" value="cash_on_delivery" checked required>
                             <label class="form-check-label w-100" for="cod">
@@ -100,7 +100,7 @@
                             </label>
                         </div>
                         
-                        <div class="form-check mb-3 p-3 border rounded">
+                        <div class="form-check mb-3 p-3 border rounded payment-option" id="payment-card">
                             <input class="form-check-input" type="radio" name="payment_method" 
                                    id="card" value="card">
                             <label class="form-check-label w-100" for="card">
@@ -396,7 +396,51 @@ document.getElementById('coupon-code-input')?.addEventListener('keypress', funct
 // NEW: STRIPE PAYMENT INTEGRATION
 // ==========================================
 
-// Update button text based on payment method
+// ==========================================
+// DYNAMIC BORDER STYLING FOR SELECTIONS
+// ==========================================
+
+// Function to update payment method borders
+function updatePaymentBorders() {
+    // Remove border-primary from all payment options
+    document.querySelectorAll('.payment-option').forEach(function(el) {
+        el.classList.remove('border-primary');
+    });
+    
+    // Add border-primary to selected payment option
+    const selectedPayment = document.querySelector('input[name="payment_method"]:checked');
+    if (selectedPayment) {
+        const parentDiv = selectedPayment.closest('.payment-option');
+        if (parentDiv) {
+            parentDiv.classList.add('border-primary');
+        }
+    }
+}
+
+// Function to update address borders
+function updateAddressBorders() {
+    // Remove border-primary from all address options
+    document.querySelectorAll('.address-option').forEach(function(el) {
+        el.classList.remove('border-primary');
+    });
+    
+    // Add border-primary to selected address option
+    const selectedAddress = document.querySelector('input[name="address_id"]:checked');
+    if (selectedAddress) {
+        const parentDiv = selectedAddress.closest('.address-option');
+        if (parentDiv) {
+            parentDiv.classList.add('border-primary');
+        }
+    }
+}
+
+// Initialize borders on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updatePaymentBorders();
+    updateAddressBorders();
+});
+
+// Update payment method button text and borders on change
 document.querySelectorAll('input[name="payment_method"]').forEach(function(radio) {
     radio.addEventListener('change', function() {
         const btnText = document.getElementById('btn-text');
@@ -406,6 +450,16 @@ document.querySelectorAll('input[name="payment_method"]').forEach(function(radio
         } else {
             btnText.textContent = 'Place Order';
         }
+        
+        // Update borders when payment method changes
+        updatePaymentBorders();
+    });
+});
+
+// Update address borders on change
+document.querySelectorAll('input[name="address_id"]').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+        updateAddressBorders();
     });
 });
 
