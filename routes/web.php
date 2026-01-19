@@ -43,6 +43,7 @@ Route::middleware(['auth'])->prefix('customer')->name('customer.')->group(functi
     Route::get('/wishlist', [CustomerController::class, 'wishlist'])->name('wishlist');
     Route::post('/wishlist/toggle', [CustomerController::class, 'toggleWishlist'])->name('wishlist.toggle');
     Route::get('/cart', [CustomerController::class, 'cart'])->name('cart');
+    Route::get('/cart/count', [CustomerController::class, 'cartCount'])->name('cart.count');
     Route::post('/cart/add', [CustomerController::class, 'addToCart'])->name('cart.add');
     Route::post('/cart/update/{id}', [CustomerController::class, 'updateCart'])->name('cart.update');
     Route::delete('/cart/remove/{id}', [CustomerController::class, 'removeFromCart'])->name('cart.remove');

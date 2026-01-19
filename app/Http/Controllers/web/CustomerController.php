@@ -167,6 +167,23 @@ class CustomerController extends Controller
     return view('customer.cart', compact('cart', 'availableCoupons'));
 }
 
+/**
+ * Get cart item count for AJAX requests
+ */
+public function cartCount()
+{
+    $user = Auth::user();
+    $cart = Cart::where('user_id', $user->id)->first();
+    
+    if (!$cart) {
+        return response()->json(['count' => 0]);
+    }
+    
+    $count = CartItem::where('cart_id', $cart->id)->sum('quantity');
+    
+    return response()->json(['count' => $count]);
+}
+
 
 /**
  * Get available coupons for cart items
@@ -260,14 +277,32 @@ private function getAvailableCoupons($cartItems, $userId)
             ->firstOrFail();
 
         if ($variant->stock < $quantity) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Insufficient stock for selected variant.'
+                ], 400);
+            }
             return redirect()->back()->with('error', 'Insufficient stock for selected variant.');
         }
 
         if (!$variant->is_active) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Selected variant is not available.'
+                ], 400);
+            }
             return redirect()->back()->with('error', 'Selected variant is not available.');
         }
     } else {
         if ($product->stock < $quantity) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Insufficient stock.'
+                ], 400);
+            }
             return redirect()->back()->with('error', 'Insufficient stock.');
         }
     }
@@ -301,12 +336,27 @@ private function getAvailableCoupons($cartItems, $userId)
         // Check stock again
         $maxStock = $variant ? $variant->stock : $product->stock;
         if ($newQuantity > $maxStock) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot add more. Maximum stock available: ' . $maxStock
+                ], 400);
+            }
             return redirect()->back()->with('error', 'Cannot add more. Maximum stock available: ' . $maxStock);
         }
         
         $existingItem->quantity = $newQuantity;
         $existingItem->save();
         
+        if ($request->expectsJson() || $request->ajax()) {
+            $cartItems = CartItem::where('cart_id', $cart->id)->get();
+            $count = $cartItems->sum('quantity');
+            return response()->json([
+                'success' => true,
+                'message' => 'Cart updated! Quantity increased.',
+                'cart_count' => $count
+            ]);
+        }
         return redirect()->back()->with('success', 'Cart updated! Quantity increased.');
     }
 
@@ -319,6 +369,15 @@ private function getAvailableCoupons($cartItems, $userId)
         'final_price' => $finalPrice,
     ]);
 
+    if ($request->expectsJson() || $request->ajax()) {
+        $cartItems = CartItem::where('cart_id', $cart->id)->get();
+        $count = $cartItems->sum('quantity');
+        return response()->json([
+            'success' => true,
+            'message' => 'Product added to cart!',
+            'cart_count' => $count
+        ]);
+    }
     return redirect()->back()->with('success', 'Product added to cart!');
 }
 
@@ -374,7 +433,28 @@ private function getAvailableCoupons($cartItems, $userId)
     $cartItem->quantity = $newQuantity;
     $cartItem->save();
 
-    return response()->json(['success' => true]);
+    // Calculate totals for AJAX response
+    $cartItems = CartItem::where('cart_id', $cart->id)->get();
+    $subtotal = $cartItems->sum(function($item) {
+        return $item->quantity * $item->final_price;
+    });
+    $tax = $subtotal * 0.1;
+    $total = $subtotal + $tax;
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Cart updated',
+        'item' => [
+            'id' => $cartItem->id,
+            'quantity' => $cartItem->quantity,
+            'price' => $cartItem->final_price
+        ],
+        'cart' => [
+            'subtotal' => $subtotal,
+            'tax' => $tax,
+            'total' => $total
+        ]
+    ]);
 }
     /**
      * Remove from cart
@@ -389,6 +469,28 @@ private function getAvailableCoupons($cartItems, $userId)
             ->firstOrFail();
 
         $cartItem->delete();
+
+        // If AJAX request, return JSON
+        if (request()->expectsJson() || request()->ajax()) {
+            // Recalculate totals after deletion
+            $cartItems = CartItem::where('cart_id', $cart->id)->get();
+            $subtotal = $cartItems->sum(function($item) {
+                return $item->quantity * $item->final_price;
+            });
+            $tax = $subtotal * 0.1;
+            $total = $subtotal + $tax;
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Item removed from cart',
+                'cart' => [
+                    'items_count' => $cartItems->count(),
+                    'subtotal' => $subtotal,
+                    'tax' => $tax,
+                    'total' => $total
+                ]
+            ]);
+        }
 
         return redirect()->back()->with('success', 'Item removed from cart');
     }
@@ -1029,5 +1131,4 @@ public function wallet()
         ->get();
 
     return view('customer.wallet', compact('refunds'));
-}
-}
+}}

@@ -324,6 +324,12 @@ public function storeProduct(Request $request)
         $vendor = Vendor::where('user_id', Auth::id())->firstOrFail();
         
         if ($vendor->status === 'rejected') {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Your vendor account has been rejected. Please contact support.'
+                ], 403);
+            }
             return redirect()->route('vendor.dashboard')
                 ->with('error', 'Your vendor account has been rejected. Please contact support.');
         }
@@ -336,6 +342,12 @@ public function storeProduct(Request $request)
         
         // Verify this order belongs to the vendor
         if ($order->vendor_id !== $vendor->id) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized access to this order'
+                ], 403);
+            }
             return redirect()->back()->with('error', 'Unauthorized access to this order');
         }
         
@@ -367,6 +379,15 @@ public function storeProduct(Request $request)
             
             DB::commit();
             
+            // Return JSON for AJAX requests
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Order status updated successfully!',
+                    'status' => $newStatus
+                ]);
+            }
+            
             return redirect()->back()->with('success', 'Order status updated successfully!');
             
         } catch (\Exception $e) {
@@ -376,6 +397,14 @@ public function storeProduct(Request $request)
                 'order_id' => $id,
                 'error' => $e->getMessage(),
             ]);
+            
+            // Return JSON error for AJAX requests
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to update order status: ' . $e->getMessage()
+                ], 500);
+            }
             
             return redirect()->back()->with('error', 'Failed to update order status: ' . $e->getMessage());
         }

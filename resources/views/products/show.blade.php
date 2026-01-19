@@ -218,9 +218,10 @@
                                        value="1" 
                                        min="1" 
                                        max="{{ ($hasVariants ?? false) ? '999' : $product['stock'] }}">
-                                <button type="submit" 
+                                <button type="button" 
                                         class="btn btn-success btn-lg" 
                                         id="add-to-cart-btn"
+                                        onclick="handleAddToCart(event)"
                                         {{ ($hasVariants ?? false) ? 'disabled' : '' }}>
                                     <i class="fas fa-cart-plus"></i> Add to Cart
                                 </button>
@@ -526,14 +527,119 @@ function ucfirst(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-// Validate form submission
-document.getElementById('add-to-cart-form')?.addEventListener('submit', function(e) {
+// Handle Add to Cart
+function handleAddToCart(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    
+    // Validate variant selection
     if (hasVariants && !document.getElementById('cart-variant-id').value) {
-        e.preventDefault();
         alert('Please select all product options before adding to cart.');
         return false;
     }
+    
+    const form = document.getElementById('add-to-cart-form');
+    const formData = new FormData(form);
+    const submitBtn = document.getElementById('add-to-cart-btn');
+    const originalBtnText = submitBtn.innerHTML;
+    
+    // Disable button and show loading
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+    
+    // Submit via AJAX
+    fetch(form.action, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+            'X-Requested-With': 'XMLHttpRequest', // Mark as AJAX request
+            'Accept': 'application/json' // Request JSON response
+        }
+    })
+    .then(response => {
+        // Check if response is ok
+        if (!response.ok) {
+            // Try to get error message from JSON
+            return response.json().then(data => {
+                throw new Error(data.message || 'Server error');
+            }).catch(() => {
+                throw new Error('Server error: ' + response.status);
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Response:', data); // Debug log
+        
+        if (data.success) {
+            showNotification('success', data.message || 'Product added to cart!');
+            updateCartCount();
+            
+            submitBtn.innerHTML = '<i class="fas fa-check"></i> Added!';
+            setTimeout(() => {
+                submitBtn.innerHTML = originalBtnText;
+                submitBtn.disabled = false;
+            }, 2000);
+        } else {
+            showNotification('error', data.message || 'Failed to add to cart');
+            submitBtn.innerHTML = originalBtnText;
+            submitBtn.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('error', error.message || 'An error occurred. Please try again.');
+        submitBtn.innerHTML = originalBtnText;
+        submitBtn.disabled = false;
+    });
+    
+    return false;
+}
+
+// Also prevent form submission
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('add-to-cart-form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            handleAddToCart(e);
+            return false;
+        });
+    }
 });
+
+// Show notification
+function showNotification(type, message) {
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);';
+    notification.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.body.appendChild(notification);
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 150);
+    }, 3000);
+}
+
+// Update cart count
+function updateCartCount() {
+    fetch('{{ route('customer.cart.count') }}')
+        .then(response => response.json())
+        .then(data => {
+            const badge = document.querySelector('.cart-count-badge');
+            if (badge && data.count !== undefined) {
+                badge.textContent = data.count;
+            }
+        })
+        .catch(error => console.error('Error:', error));
+}
 
 // Wishlist function
 function toggleWishlist(productId) {
@@ -548,8 +654,12 @@ function toggleWishlist(productId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert(data.message);
+            showNotification('success', data.message);
         }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('error', 'An error occurred');
     });
 }
 </script>

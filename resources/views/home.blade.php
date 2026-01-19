@@ -145,17 +145,12 @@
                                     <i class="fas fa-eye"></i> View
                                 </a>
                                 @if(Session::has('user') && Session::get('user')['role'] === 'customer')
-                                    <form action="{{ route('customer.cart.add') }}" 
-                                          method="POST" 
-                                          class="flex-fill">
-                                        @csrf
-                                        <input type="hidden" name="product_id" value="{{ $product['id'] }}">
-                                        <button type="submit" 
-                                                class="btn btn-cart w-100"
-                                                {{ $product['stock'] == 0 ? 'disabled' : '' }}>
-                                            <i class="fas fa-shopping-cart"></i> Cart
-                                        </button>
-                                    </form>
+                                    <button type="button" 
+                                            class="btn btn-cart flex-fill add-to-cart-home"
+                                            data-product-id="{{ $product['id'] }}"
+                                            {{ $product['stock'] == 0 ? 'disabled' : '' }}>
+                                        <i class="fas fa-shopping-cart"></i> Cart
+                                    </button>
                                 @else
                                     <a href="{{ route('login') }}" class="btn btn-cart flex-fill">
                                         <i class="fas fa-shopping-cart"></i> Cart
@@ -301,17 +296,12 @@
                                     <i class="fas fa-eye"></i> View
                                 </a>
                                 @if(Session::has('user') && Session::get('user')['role'] === 'customer')
-                                    <form action="{{ route('customer.cart.add') }}" 
-                                          method="POST" 
-                                          class="flex-fill">
-                                        @csrf
-                                        <input type="hidden" name="product_id" value="{{ $product['id'] }}">
-                                        <button type="submit" 
-                                                class="btn btn-cart w-100"
-                                                {{ $product['stock'] == 0 ? 'disabled' : '' }}>
-                                            <i class="fas fa-shopping-cart"></i> Cart
-                                        </button>
-                                    </form>
+                                    <button type="button" 
+                                            class="btn btn-cart flex-fill add-to-cart-home"
+                                            data-product-id="{{ $product['id'] }}"
+                                            {{ $product['stock'] == 0 ? 'disabled' : '' }}>
+                                        <i class="fas fa-shopping-cart"></i> Cart
+                                    </button>
                                 @else
                                     <a href="{{ route('login') }}" class="btn btn-cart flex-fill">
                                         <i class="fas fa-shopping-cart"></i> Cart
@@ -454,18 +444,13 @@
                                             <i class="fas fa-eye"></i> View
                                         </a>
                                         @if(Session::has('user') && Session::get('user')['role'] === 'customer')
-                                            <form action="{{ route('customer.cart.add') }}" 
-                                                  method="POST" 
-                                                  class="flex-fill">
-                                                @csrf
-                                                <input type="hidden" name="product_id" value="{{ $product['id'] }}">
-                                                <button type="submit" 
-                                                        class="btn btn-cart w-100"
-                                                        {{ $product['stock'] == 0 ? 'disabled' : '' }}>
-                                                    <i class="fas fa-shopping-cart"></i> Cart
-                                                </button>
-                                            </form>
-                                        @else
+                                    <button type="button" 
+                                            class="btn btn-cart flex-fill add-to-cart-home"
+                                            data-product-id="{{ $product['id'] }}"
+                                            {{ $product['stock'] == 0 ? 'disabled' : '' }}>
+                                        <i class="fas fa-shopping-cart"></i> Cart
+                                    </button>
+                                @else
                                             <a href="{{ route('login') }}" class="btn btn-cart flex-fill">
                                                 <i class="fas fa-shopping-cart"></i> Cart
                                             </a>
@@ -816,6 +801,7 @@
 
 @push('scripts')
 <script>
+// Wishlist toggle
 document.querySelectorAll('.wishlist-btn').forEach(btn => {
     btn.addEventListener('click', function() {
         const productId = this.dataset.productId;
@@ -824,7 +810,9 @@ document.querySelectorAll('.wishlist-btn').forEach(btn => {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
             },
             body: JSON.stringify({ product_id: productId })
         })
@@ -835,10 +823,102 @@ document.querySelectorAll('.wishlist-btn').forEach(btn => {
                 icon.classList.toggle('far');
                 icon.classList.toggle('fas');
                 icon.classList.toggle('text-danger');
+                showNotification('success', data.message || 'Wishlist updated!');
             }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showNotification('error', 'An error occurred');
         });
     });
 });
+
+// Add to cart from home page
+document.querySelectorAll('.add-to-cart-home').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const productId = this.dataset.productId;
+        const originalText = this.innerHTML;
+        
+        // Disable button and show loading
+        this.disabled = true;
+        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+        
+        fetch('{{ route('customer.cart.add') }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                product_id: productId,
+                quantity: 1
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Server error');
+                }).catch(() => {
+                    throw new Error('Server error: ' + response.status);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                showNotification('success', data.message || 'Product added to cart!');
+                updateCartCount();
+                
+                this.innerHTML = '<i class="fas fa-check"></i> Added!';
+                setTimeout(() => {
+                    this.innerHTML = originalText;
+                    this.disabled = false;
+                }, 2000);
+            } else {
+                showNotification('error', data.message || 'Failed to add to cart');
+                this.innerHTML = originalText;
+                this.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showNotification('error', error.message || 'An error occurred');
+            this.innerHTML = originalText;
+            this.disabled = false;
+        });
+    });
+});
+
+// Show notification
+function showNotification(type, message) {
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);';
+    notification.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.body.appendChild(notification);
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 150);
+    }, 3000);
+}
+
+// Update cart count
+function updateCartCount() {
+    fetch('{{ route('customer.cart.count') }}')
+        .then(response => response.json())
+        .then(data => {
+            const badge = document.querySelector('.cart-count-badge');
+            if (badge && data.count !== undefined) {
+                badge.textContent = data.count;
+            }
+        })
+        .catch(error => console.error('Error:', error));
+}
 </script>
 @endpush
 @endsection
