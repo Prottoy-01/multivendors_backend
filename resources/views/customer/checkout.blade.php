@@ -114,12 +114,10 @@
                                 </div>
                             </label>
                         </div>
-                        
-                       
                     </div>
                 </div>
 
-                {{-- ✅✅✅ UPDATED: COUPON CODE SECTION WITH CATEGORY SUPPORT ✅✅✅ --}}
+                {{-- ✅✅✅ COUPON CODE SECTION ✅✅✅ --}}
                 <div class="card mb-3">
                     <div class="card-header bg-warning text-dark">
                         <h5 class="mb-0"><i class="fas fa-ticket-alt"></i> Have a Coupon Code?</h5>
@@ -161,7 +159,7 @@
                                     </div>
                                     <div id="coupon-message"></div>
                                     
-                                    {{-- ✅ UPDATED: Show Available Coupons from Controller --}}
+                                    {{-- Available Coupons --}}
                                     @if(!empty($availableCoupons) && count($availableCoupons) > 0)
                                     <div class="mt-3">
                                         <small class="text-muted">
@@ -221,7 +219,7 @@
                         </div>
                     </div>
                 </div>
-                {{-- ✅✅✅ END: UPDATED COUPON CODE SECTION ✅✅✅ --}}
+                {{-- ✅✅✅ END COUPON CODE SECTION ✅✅✅ --}}
 
                 <!-- Order Notes -->
                 <div class="card">
@@ -264,14 +262,14 @@
                         
                         <hr>
                         
-                        {{-- ✅✅✅ YOUR ORDER SUMMARY (PRESERVED) ✅✅✅ --}}
+                        {{-- Order Summary Totals --}}
                         <div class="d-flex justify-content-between mb-2">
                             <span>Subtotal:</span>
                             <strong id="subtotal-amount">${{ number_format($cart['subtotal'], 2) }}</strong>
                         </div>
                         
                         @if(isset($cart['coupon_discount']) && $cart['coupon_discount'] > 0)
-                        <div class="d-flex justify-content-between mb-2 text-success">
+                        <div class="d-flex justify-content-between mb-2 text-success" id="coupon-discount-row">
                             <span><i class="fas fa-tag"></i> Coupon Discount:</span>
                             <strong id="coupon-discount-amount">-${{ number_format($cart['coupon_discount'], 2) }}</strong>
                         </div>
@@ -292,7 +290,6 @@
                             <strong class="fs-5">Total:</strong>
                             <h4 class="text-success mb-0" id="total-amount">${{ number_format($cart['total'], 2) }}</h4>
                         </div>
-                        {{-- ✅✅✅ END: YOUR ORDER SUMMARY ✅✅✅ --}}
                         
                         <div class="d-grid gap-2">
                             <button type="button" id="place-order-btn" class="btn btn-success btn-lg">
@@ -315,10 +312,10 @@
     </form>
 </div>
 
-{{-- ✅✅✅ COMBINED JAVASCRIPT: YOUR COUPON CODE + STRIPE PAYMENT ✅✅✅ --}}
+{{-- ✅✅✅ JAVASCRIPT WITH AJAX COUPON (NO RELOAD) ✅✅✅ --}}
 <script>
 // ==========================================
-// YOUR ORIGINAL COUPON FUNCTIONS (PRESERVED)
+// ✅ AJAX COUPON FUNCTIONS (NO RELOAD)
 // ==========================================
 function applyCoupon() {
     const couponCode = document.getElementById('coupon-code-input').value.trim();
@@ -343,13 +340,15 @@ function applyCoupon() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Show success message
+            // ✅ Show success message
             messageDiv.innerHTML = `<div class="alert alert-success"><i class="fas fa-check-circle"></i> ${data.message}</div>`;
             
-            // Reload page to show updated totals
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
+            // ✅ Update totals WITHOUT reloading
+            updateOrderSummary(data.totals);
+            
+            // ✅ Show applied coupon badge
+            showAppliedCoupon(data.coupon);
+            
         } else {
             messageDiv.innerHTML = `<div class="alert alert-danger alert-dismissible fade show"><i class="fas fa-times-circle"></i> ${data.message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
         }
@@ -358,6 +357,62 @@ function applyCoupon() {
         console.error('Error:', error);
         messageDiv.innerHTML = '<div class="alert alert-danger alert-dismissible fade show"><i class="fas fa-exclamation-triangle"></i> Error applying coupon. Please try again.<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>';
     });
+}
+
+/**
+ * Update order summary dynamically
+ */
+function updateOrderSummary(totals) {
+    // Update subtotal
+    document.getElementById('subtotal-amount').textContent = '$' + parseFloat(totals.subtotal).toFixed(2);
+    
+    // Update or create coupon discount row
+    let couponDiscountRow = document.getElementById('coupon-discount-row');
+    
+    if (totals.discount > 0) {
+        if (!couponDiscountRow) {
+            // Create new discount row
+            const taxRow = document.querySelector('#tax-amount').closest('.d-flex');
+            couponDiscountRow = document.createElement('div');
+            couponDiscountRow.id = 'coupon-discount-row';
+            couponDiscountRow.className = 'd-flex justify-content-between mb-2 text-success';
+            couponDiscountRow.innerHTML = `
+                <span><i class="fas fa-tag"></i> Coupon Discount:</span>
+                <strong id="coupon-discount-amount">-$${parseFloat(totals.discount).toFixed(2)}</strong>
+            `;
+            taxRow.parentNode.insertBefore(couponDiscountRow, taxRow);
+        } else {
+            // Update existing
+            document.getElementById('coupon-discount-amount').textContent = '-$' + parseFloat(totals.discount).toFixed(2);
+        }
+    }
+    
+    // Update tax
+    document.getElementById('tax-amount').textContent = '$' + parseFloat(totals.tax).toFixed(2);
+    
+    // Update total
+    document.getElementById('total-amount').textContent = '$' + parseFloat(totals.total).toFixed(2);
+}
+
+/**
+ * Show applied coupon and hide input
+ */
+function showAppliedCoupon(coupon) {
+    const couponSection = document.getElementById('coupon-section');
+    
+    couponSection.innerHTML = `
+        <div class="alert alert-success d-flex justify-content-between align-items-center" id="applied-coupon-display">
+            <div>
+                <i class="fas fa-check-circle"></i>
+                <strong>${coupon.code}</strong> applied!
+                <br>
+                <small>You're saving $${parseFloat(coupon.discount).toFixed(2)}</small>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeCoupon()">
+                <i class="fas fa-times"></i> Remove
+            </button>
+        </div>
+    `;
 }
 
 function removeCoupon() {
@@ -393,21 +448,15 @@ document.getElementById('coupon-code-input')?.addEventListener('keypress', funct
 });
 
 // ==========================================
-// NEW: STRIPE PAYMENT INTEGRATION
-// ==========================================
-
-// ==========================================
-// DYNAMIC BORDER STYLING FOR SELECTIONS
+// STRIPE PAYMENT INTEGRATION
 // ==========================================
 
 // Function to update payment method borders
 function updatePaymentBorders() {
-    // Remove border-primary from all payment options
     document.querySelectorAll('.payment-option').forEach(function(el) {
         el.classList.remove('border-primary');
     });
     
-    // Add border-primary to selected payment option
     const selectedPayment = document.querySelector('input[name="payment_method"]:checked');
     if (selectedPayment) {
         const parentDiv = selectedPayment.closest('.payment-option');
@@ -419,12 +468,10 @@ function updatePaymentBorders() {
 
 // Function to update address borders
 function updateAddressBorders() {
-    // Remove border-primary from all address options
     document.querySelectorAll('.address-option').forEach(function(el) {
         el.classList.remove('border-primary');
     });
     
-    // Add border-primary to selected address option
     const selectedAddress = document.querySelector('input[name="address_id"]:checked');
     if (selectedAddress) {
         const parentDiv = selectedAddress.closest('.address-option');
@@ -451,7 +498,6 @@ document.querySelectorAll('input[name="payment_method"]').forEach(function(radio
             btnText.textContent = 'Place Order';
         }
         
-        // Update borders when payment method changes
         updatePaymentBorders();
     });
 });

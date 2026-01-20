@@ -634,8 +634,11 @@ private function getAvailableCoupons($cartItems, $userId)
         $fullSubtotal = $cartItems->sum(function($item) {
             return $item->quantity * $item->final_price;
         });
-        $tax = $fullSubtotal * 0.10;
-        $total = $fullSubtotal - $discount + $tax;
+        
+        // ✅ FIX: Calculate tax AFTER discount, not before
+        $subtotalAfterDiscount = max(0, $fullSubtotal - $discount);
+        $tax = $subtotalAfterDiscount * 0.10;
+        $total = $subtotalAfterDiscount + $tax;
         
         return response()->json([
             'success' => true,
@@ -659,7 +662,35 @@ private function getAvailableCoupons($cartItems, $userId)
  */
 public function removeCoupon()
 {
+    $user = Auth::user();
+    
+    // Remove coupon from session
     session()->forget('applied_coupon');
+    
+    // ✅ Calculate totals WITHOUT coupon (for AJAX response)
+    $cart = Cart::where('user_id', $user->id)->first();
+    
+    if ($cart) {
+        $cartItems = CartItem::where('cart_id', $cart->id)->get();
+        $subtotal = $cartItems->sum(function($item) {
+            return $item->quantity * $item->final_price;
+        });
+        
+        // Tax on full subtotal (no discount)
+        $tax = $subtotal * 0.10;
+        $total = $subtotal + $tax;
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Coupon removed.',
+            'totals' => [
+                'subtotal' => $subtotal,
+                'discount' => 0,
+                'tax' => $tax,
+                'total' => $total,
+            ]
+        ]);
+    }
     
     return response()->json([
         'success' => true,
