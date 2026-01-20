@@ -190,69 +190,99 @@ public function cartCount()
  */
 private function getAvailableCoupons($cartItems, $userId)
 {
-    if ($cartItems->isEmpty()) {
+    if (!$cartItems || $cartItems->isEmpty()) {
         return [];
     }
 
-    // Get category IDs from cart items
-    $cartCategoryIds = $cartItems->pluck('product.category_id')->unique()->filter()->values();
-
-    // Get valid coupons
-    $coupons = Coupon::with('categories')
-        ->where('is_active', true)
-        ->where(function($q) {
-            $now = now();
-            $q->where(function($q2) use ($now) {
-                $q2->whereNull('valid_from')
-                   ->orWhere('valid_from', '<=', $now);
+    try {
+        // Get cart category IDs
+        $cartCategoryIds = $cartItems
+            ->map(function($item) {
+                return $item->product && isset($item->product->category_id) 
+                    ? $item->product->category_id 
+                    : null;
             })
-            ->where(function($q2) use ($now) {
-                $q2->whereNull('valid_until')
-                   ->orWhere('valid_until', '>=', $now);
-            });
-        })
-        ->where(function($q) {
-            $q->whereNull('usage_limit')
-              ->orWhereColumn('usage_count', '<', 'usage_limit');
-        })
-        ->get()
-        ->filter(function($coupon) use ($userId, $cartCategoryIds) {
-            // Check per-user limit
-            $userUsageCount = CouponUsage::where([
-                'coupon_id' => $coupon->id,
-                'user_id' => $userId
-            ])->count();
-            
-            if ($userUsageCount >= $coupon->per_user_limit) {
-                return false;
-            }
+            ->filter(function($categoryId) {
+                return $categoryId !== null;
+            })
+            ->unique()
+            ->values();
+        
+        $now = now();
+        
+        $coupons = Coupon::with('categories')
+            ->where('is_active', 1)
+            ->where(function($q) use ($now) {
+                $q->where(function($q2) use ($now) {
+                    $q2->whereNull('valid_from')
+                       ->orWhere('valid_from', '<=', $now);
+                })
+                ->where(function($q2) use ($now) {
+                    $q2->whereNull('valid_until')
+                       ->orWhere('valid_until', '>=', $now);
+                });
+            })
+            ->where(function($q) {
+                $q->whereNull('usage_limit')
+                  ->orWhereColumn('usage_count', '<', 'usage_limit');
+            })
+            ->get()
+            ->filter(function($coupon) use ($userId, $cartCategoryIds) {
+                try {
+                    $userUsageCount = CouponUsage::where([
+                        'coupon_id' => $coupon->id,
+                        'user_id' => $userId
+                    ])->count();
+                    
+                    if ($userUsageCount >= $coupon->per_user_limit) {
+                        return false;
+                    }
+                    
+                    // ✅ KEY FIX: Show if applies to ALL
+                    if ($coupon->applies_to_all) {
+                        return true; // ALWAYS show general coupons
+                    }
+                    
+                    // ✅ KEY FIX: Show if ANY cart category matches
+                    if ($cartCategoryIds->isEmpty()) {
+                        return false;
+                    }
+                    
+                    $couponCategoryIds = $coupon->categories->pluck('id');
+                    
+                    if ($couponCategoryIds->isEmpty()) {
+                        return false;
+                    }
+                    
+                    // Show if at least one match
+                    return $couponCategoryIds->intersect($cartCategoryIds)->isNotEmpty();
+                    
+                } catch (\Exception $e) {
+                    return false;
+                }
+            })
+            ->map(function($coupon) {
+                return [
+                    'id' => $coupon->id,
+                    'code' => $coupon->code,
+                    'type' => $coupon->type,
+                    'value' => $coupon->value,
+                    'description' => $coupon->description ?? '',
+                    'applies_to_all' => $coupon->applies_to_all ?? false, // ✅ Actual value
+                    'categories' => $coupon->categories->pluck('name')->toArray(), // ✅ Actual categories
+                    'min_purchase' => $coupon->min_purchase ?? 0,
+                    'valid_until' => $coupon->valid_until ? $coupon->valid_until->format('M d, Y') : null,
+                ];
+            })
+            ->values()
+            ->toArray();
 
-            // Check if coupon applies to cart items
-            if ($coupon->applies_to_all) {
-                return true;
-            }
-
-            // Check if any cart category matches coupon categories
-            $couponCategoryIds = $coupon->categories->pluck('id');
-            return $couponCategoryIds->intersect($cartCategoryIds)->isNotEmpty();
-        })
-        ->map(function($coupon) {
-            return [
-                'id' => $coupon->id,
-                'code' => $coupon->code,
-                'type' => $coupon->type,
-                'value' => $coupon->value,
-                'description' => $coupon->description,
-                'applies_to_all' => $coupon->applies_to_all,
-                'categories' => $coupon->categories->pluck('name')->toArray(),
-                'min_purchase' => $coupon->min_purchase,
-                'valid_until' => $coupon->valid_until?->format('M d, Y'),
-            ];
-        })
-        ->values()
-        ->toArray();
-
-    return $coupons;
+        return $coupons;
+        
+    } catch (\Exception $e) {
+        \Log::error('Error in getAvailableCoupons: ' . $e->getMessage());
+        return [];
+    }
 }
 
     /**
@@ -684,8 +714,9 @@ public function checkout()
         }
     }
 
-    $tax = $subtotal * 0.1;
-    $total = $subtotal - $couponDiscount + $tax;
+   $subtotalAfterDiscount = $subtotal - $couponDiscount;
+$tax = $subtotalAfterDiscount * 0.1;
+$total = $subtotalAfterDiscount + $tax;
 
     $cart = [
         'id' => $cart->id,
