@@ -104,13 +104,13 @@
 
             <div class="mb-3">
                 @if($product['has_offer'] && $product['final_price'] < $product['price'])
-                    <h3 class="text-danger">
+                    <h3 class="text-success">
                         ${{ number_format($product['final_price'], 2) }}
                         <span class="text-muted text-decoration-line-through fs-5 ms-2">
                             ${{ number_format($product['price'], 2) }}
                         </span>
                     </h3>
-                    <span class="badge bg-danger">
+                    <span class="badge bg-success">
                         @if($product['discount_type'] === 'percentage')
                             {{ $product['discount_value'] }}% OFF
                         @else
@@ -125,7 +125,7 @@
             <div class="mb-3">
                 <strong>Availability:</strong>
                 @if($product['stock'] > 0)
-                    <span class="text-success">In Stock ({{ $product['stock'] }} available)</span>
+                    <span class="text-primary">In Stock ({{ $product['stock'] }} available)</span>
                 @else
                     <span class="text-danger">Out of Stock</span>
                 @endif
@@ -136,7 +136,7 @@
                 <p>{{ $product['description'] }}</p>
             </div>
 
-            {{-- ✅✅✅ NEW: VARIANT SELECTOR SECTION ✅✅✅ --}}
+            {{--  NEW: VARIANT SELECTOR SECTION  --}}
             @if($product['stock'] > 0 || ($hasVariants ?? false))
                 
                 {{-- Variant Selection Card --}}
@@ -203,7 +203,7 @@
                 </div>
                 @endif
                 
-                {{-- ✅✅✅ UPDATED: Add to Cart Section ✅✅✅ --}}
+                {{--  UPDATED: Add to Cart Section  --}}
                 <div class="d-grid gap-2 mb-3">
                     @if(Auth::check() && Auth::user()->role === 'customer')
                         <form action="{{ route('customer.cart.add') }}" method="POST" id="add-to-cart-form">
@@ -219,7 +219,7 @@
                                        min="1" 
                                        max="{{ ($hasVariants ?? false) ? '999' : $product['stock'] }}">
                                 <button type="button" 
-                                        class="btn btn-success btn-lg" 
+                                        class="btn btn-primary btn-lg" 
                                         id="add-to-cart-btn"
                                         onclick="handleAddToCart(event)"
                                         {{ ($hasVariants ?? false) ? 'disabled' : '' }}>
@@ -439,7 +439,7 @@
 </div>
 @endif
 
-{{-- ✅✅✅ UPDATED: JavaScript with Variant Logic ✅✅✅ --}}
+{{--  UPDATED: JavaScript with Variant Logic  --}}
 @push('scripts')
 <script>
 // Product variants data

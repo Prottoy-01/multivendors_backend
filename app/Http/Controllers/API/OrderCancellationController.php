@@ -13,16 +13,7 @@ use Illuminate\Support\Facades\Log;
 
 class OrderCancellationController extends Controller
 {
-    /**
-     * Customer: Cancel Order
-     * 
-     * Business Rules:
-     * - If order status is 'pending', 'paid', or 'processing': 100% refund to customer wallet
-     * - If order status is 'shipped': 40% refund to customer wallet, 60% retained by vendor
-     * - Cannot cancel if status is 'delivered' or already 'cancelled'
-     * - Refund goes to customer's wallet balance
-     * - Vendor's total_earnings is adjusted accordingly
-     */
+    
     public function cancelOrder(Request $request, $orderId)
     {
         $request->validate([
@@ -61,7 +52,7 @@ class OrderCancellationController extends Controller
         DB::beginTransaction();
 
         try {
-            // Get the original order amount (use grand_total if available, otherwise total_amount)
+            // Get the original order amount 
             $originalAmount = $order->grand_total ?? $order->total_amount;
             
             // Calculate refund based on order status
@@ -95,20 +86,16 @@ class OrderCancellationController extends Controller
             $customer = User::findOrFail($user->id);
             $customer->increment('wallet_balance', $refundAmount);
 
-            // Update vendor's total_earnings
-            // If order was shipped, vendor keeps 60% (vendor_retention)
+            
             // If order was not shipped, vendor loses the full amount
             $vendor = Vendor::findOrFail($order->vendor_id);
             
             if ($statusAtCancellation === Order::STATUS_SHIPPED) {
-                // Vendor was already credited when order was marked as shipped
-                // Now we need to deduct the refund amount (40% of original)
+               
+                //  need to deduct the refund amount (40% of original)
                 $vendor->decrement('total_earnings', $refundAmount);
             } else {
-                // Order was not shipped yet, vendor should not have been credited
-                // But if they were credited on order placement, we need to deduct full amount
-                // Assuming vendor gets credited on 'delivered' status only, no action needed here
-                // However, to be safe, we'll deduct the refund amount
+              
                 $vendor->decrement('total_earnings', max(0, $refundAmount));
             }
 
@@ -149,8 +136,8 @@ class OrderCancellationController extends Controller
                     'refund_status' => 'completed',
                     'wallet_balance' => $customer->wallet_balance,
                     'message' => $refundPercentage < 100 
-                        ? "Order was shipped. You will receive {$refundPercentage}% refund (৳{$refundAmount}) to your wallet."
-                        : "You will receive full refund (৳{$refundAmount}) to your wallet."
+                        ? "Order was shipped. You will receive {$refundPercentage}% refund ({$refundAmount}) to your wallet."
+                        : "You will receive full refund ({$refundAmount}) to your wallet."
                 ]
             ], 200);
 

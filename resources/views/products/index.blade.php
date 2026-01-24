@@ -161,7 +161,7 @@
                                                 <small class="text-muted text-decoration-line-through d-block">
                                                     ${{ number_format($product['price'], 2) }}
                                                 </small>
-                                                <span class="text-danger fw-bold fs-6">
+                                                <span class="text-success fw-bold fs-6">
                                                     ${{ number_format($product['final_price'], 2) }}
                                                 </span>
                                             </div>
@@ -525,6 +525,7 @@ function updateCartCount() {
         font-size: 0.65rem;
         padding: 3px 8px;
         font-weight: 600;
+        background: linear-gradient(135deg, #0ab21e 0%, #0a8934 100%)
     }
 
     /* Beautiful Buttons */

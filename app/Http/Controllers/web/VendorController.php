@@ -19,7 +19,6 @@ class VendorController extends Controller
 {
     /**
      * Vendor dashboard
-     * ⭐ CRITICAL FIX: Now uses vendor->total_earnings which is automatically updated
      */
     public function dashboard()
     {
@@ -28,9 +27,7 @@ class VendorController extends Controller
         // Get vendor's product IDs
         $productIds = Product::where('vendor_id', $vendor->id)->pluck('id');
         
-        // ⭐⭐⭐ CRITICAL FIX: Use vendor's total_earnings field
-        // This field is automatically updated:
-        // - Incremented when order is marked as "shipped"
+        
         // - Decremented when order is cancelled (by refund amount)
         $totalRevenue = $vendor->total_earnings ?? 0;
 
@@ -94,7 +91,7 @@ return view('vendor.products.index', compact('products', 'categories'));
     {
         $vendor = Vendor::where('user_id', Auth::id())->firstOrFail();
         
-        // ✅ STEP 5: Check if vendor is approved
+        // STEP 5: Check if vendor is approved
         if ($vendor->status !== 'approved') {
             return redirect()->route('vendor.dashboard')
                 ->with('error', 'Your vendor account must be approved before you can add products. Current status: ' . ucfirst($vendor->status));
@@ -108,7 +105,7 @@ public function storeProduct(Request $request)
 {
     $vendor = Vendor::where('user_id', Auth::id())->firstOrFail();
     
-    // ✅ Check if vendor is approved
+    //  Check if vendor is approved
     if ($vendor->status !== 'approved') {
         return redirect()->route('vendor.dashboard')
             ->with('error', 'Your vendor account must be approved before you can add products. Current status: ' . ucfirst($vendor->status));
@@ -161,7 +158,7 @@ public function storeProduct(Request $request)
         }
     }
 
-    // ✅ Create variants if provided
+    //  Create variants if provided
     if ($request->has('variants') && is_array($request->variants)) {
         foreach ($request->variants as $variantData) {
             // Build attributes array
@@ -317,7 +314,7 @@ public function storeProduct(Request $request)
 
     /**
      * Update order status
-     * ⭐⭐⭐ CRITICAL FIX: Now properly updates vendor earnings when shipped
+     
      */
     public function updateOrderStatus(Request $request, $id)
     {
@@ -361,12 +358,15 @@ public function storeProduct(Request $request)
             $order->status = $newStatus;
             $order->save();
             
-            // ⭐⭐⭐ CRITICAL: Track vendor earnings when order is SHIPPED
+            //  Track vendor earnings when order is SHIPPED
             if ($oldStatus !== Order::STATUS_SHIPPED && $newStatus === Order::STATUS_SHIPPED) {
                 $orderAmount = $order->grand_total ?? $order->total_amount;
                 
                 // Add to vendor's total_earnings
-                $vendor->increment('total_earnings', $orderAmount);
+                if ($order->payment_method === 'cash_on_delivery') {
+    $vendor->increment('total_earnings', $orderAmount);
+}
+// Card payments skip this - already added when paid
                 
                 Log::info('Vendor earnings updated on order shipped', [
                     'order_id' => $order->id,
@@ -445,14 +445,13 @@ public function storeProduct(Request $request)
     }
 
     /**
-     * Analytics
-     * ⭐ CRITICAL FIX: Uses vendor->total_earnings for accurate revenue
+    
      */
     public function analytics()
     {
         $vendor = Vendor::where('user_id', Auth::id())->firstOrFail();
         
-        // ⭐ Use vendor's total_earnings for accurate revenue
+        //  Use vendor's total_earnings for accurate revenue
         $totalRevenue = $vendor->total_earnings ?? 0;
         
         $totalOrders = Order::where('vendor_id', $vendor->id)->count();

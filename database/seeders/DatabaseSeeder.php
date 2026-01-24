@@ -19,7 +19,7 @@ class DatabaseSeeder extends Seeder
 
         $this->call([
         ProductAttributeSeeder::class,
-    ]);
+     ]);
 
         User::factory()->create([
             'name' => 'Test User',

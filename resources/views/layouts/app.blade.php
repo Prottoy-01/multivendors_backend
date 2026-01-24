@@ -6,7 +6,7 @@
 /* Star Rating Styles */
 .rating-stars {
     display: flex;
-    flex-direction: row-reverse;
+    flex-direction: row;
     justify-content: flex-end;
     font-size: 2rem;
 }
@@ -47,10 +47,11 @@
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-success">
         <div class="container">
             <a class="navbar-brand" href="{{ route('home') }}">
-                <i class="fas fa-store"></i> MultiVendor Shop
+                <button class="btn btn-outline-light" type="submit">
+                <i class="fas fa-store"></button></i> MultiVendor Shop
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -78,19 +79,22 @@
                         @if($user['role'] === 'customer')
                             <li class="nav-item">
                                 <a class="nav-link" href="{{ route('customer.cart') }}">
-                                    <i class="fas fa-shopping-cart"></i> Cart
+                                    <button class="btn btn-outline-light" type="submit">
+                                    <i class="fas fa-shopping-cart"></i></button>
                                 </a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" href="{{ route('customer.wishlist') }}">
-                                    <i class="fas fa-heart"></i> Wishlist
+                                    <button class="btn btn-outline-light" type="submit">
+                                    <i class="fas fa-heart"></i> </button>
                                 </a>
                             </li>
                         @endif
                         
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
-                                <i class="fas fa-user"></i> {{ $user['name'] }}
+                                <button class="btn btn-outline-light" type="submit">
+                                <i class="fas fa-user"></i></button> {{ $user['name'] }}
                             </a>
                             <ul class="dropdown-menu">
                                 @if($user['role'] === 'admin')
@@ -116,12 +120,14 @@
                     @else
                         <li class="nav-item">
                             <a class="nav-link" href="{{ route('login') }}">
-                                <i class="fas fa-sign-in-alt"></i> Login
+                                <button class="btn btn-outline-light" type="submit">
+                                <i class="fas fa-sign-in-alt"></i></button> Login
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="{{ route('register') }}">
-                                <i class="fas fa-user-plus"></i> Register
+                                <button class="btn btn-outline-light" type="submit">
+                                <i class="fas fa-user-plus"></i></button> Register
                             </a>
                         </li>
                     @endif
@@ -162,7 +168,7 @@
     </main>
 
     <!-- Footer -->
-    <footer class="bg-dark text-white mt-5 py-4">
+    <footer class="bg-success text-white mt-5 py-4">
         <div class="container">
             <div class="row">
                 <div class="col-md-4">

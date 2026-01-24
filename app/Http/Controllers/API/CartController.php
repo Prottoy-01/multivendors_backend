@@ -18,7 +18,7 @@ class CartController extends Controller
         ]);
     }
 
-    // 1️⃣ View Cart
+    //  View Cart
     public function index(Request $request)
     {
         $cart = Cart::where('user_id', $request->user()->id)
@@ -32,7 +32,7 @@ class CartController extends Controller
         return response()->json($cart);
     }
 
-    // 2️⃣ Add to Cart
+    //  Add to Cart
     public function add(Request $request)
     {
         $request->validate([
@@ -67,7 +67,7 @@ class CartController extends Controller
         return response()->json(['message' => 'Product added to cart']);
     }
 
-    // 3️⃣ Update Cart Item Quantity
+    //  Update Cart Item Quantity
     public function update(Request $request, $id)
     {
         $request->validate([
@@ -87,7 +87,7 @@ class CartController extends Controller
         return response()->json(['message' => 'Cart updated']);
     }
 
-    // 4️⃣ Remove Item from Cart
+    //  Remove Item from Cart
     public function remove(Request $request, $id)
     {
         $item = CartItem::findOrFail($id);

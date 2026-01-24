@@ -37,7 +37,7 @@
                             @endif
                         </div>
                         <div class="col-md-2">
-                            <strong>${{ number_format($item['price'], 2) }}</strong>
+                            <strong>${{ number_format($item['final_price'], 2) }}</strong>
                         </div>
                         <div class="col-md-2">
                             <div class="input-group">
@@ -63,7 +63,7 @@
                             </div>
                         </div>
                         <div class="col-md-2 text-end">
-                            <strong id="subtotal-{{ $item['id'] }}">${{ number_format($item['quantity'] * $item['price'], 2) }}</strong>
+                            <strong id="subtotal-{{ $item['id'] }}">${{ number_format($item['quantity'] * $item['final_price'], 2) }}</strong>
                             <br>
                             <button type="button" 
                                     class="btn btn-sm btn-danger mt-2" 

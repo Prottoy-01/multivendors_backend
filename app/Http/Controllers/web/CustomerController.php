@@ -17,7 +17,7 @@ use App\Models\Coupon;
 use App\Models\CouponUsage;
 use App\Models\OrderCancellation;
 use App\Models\Payment;
-use App\Models\Vendor; // ⭐ ADDED - Required for vendor earnings
+use App\Models\Vendor; 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -133,12 +133,12 @@ class CustomerController extends Controller
         ['user_id' => $user->id]
     );
 
-    // ✅ UPDATED: Load category for coupon checking
+    //  Load category for coupon checking
     $cartItems = CartItem::where('cart_id', $cart->id)
         ->with([
             'product.images',
             'product.vendor',
-            'product.category', // ✅ NEW
+            'product.category', // 
             'variant'
         ])
         ->get()
@@ -153,7 +153,7 @@ class CustomerController extends Controller
         return $item->quantity * $item->final_price;
     });
 
-    // ✅ NEW: Get available coupons
+    //  Get available coupons
     $availableCoupons = $this->getAvailableCoupons($cartItems, $user->id);
 
     $cart = [
@@ -238,12 +238,12 @@ private function getAvailableCoupons($cartItems, $userId)
                         return false;
                     }
                     
-                    // ✅ KEY FIX: Show if applies to ALL
+                    //  KEY FIX: Show if applies to ALL
                     if ($coupon->applies_to_all) {
                         return true; // ALWAYS show general coupons
                     }
                     
-                    // ✅ KEY FIX: Show if ANY cart category matches
+                    //  KEY FIX: Show if ANY cart category matches
                     if ($cartCategoryIds->isEmpty()) {
                         return false;
                     }
@@ -268,8 +268,8 @@ private function getAvailableCoupons($cartItems, $userId)
                     'type' => $coupon->type,
                     'value' => $coupon->value,
                     'description' => $coupon->description ?? '',
-                    'applies_to_all' => $coupon->applies_to_all ?? false, // ✅ Actual value
-                    'categories' => $coupon->categories->pluck('name')->toArray(), // ✅ Actual categories
+                    'applies_to_all' => $coupon->applies_to_all ?? false, 
+                    'categories' => $coupon->categories->pluck('name')->toArray(), 
                     'min_purchase' => $coupon->min_purchase ?? 0,
                     'valid_until' => $coupon->valid_until ? $coupon->valid_until->format('M d, Y') : null,
                 ];
@@ -567,7 +567,7 @@ private function getAvailableCoupons($cartItems, $userId)
             ], 422);
         }
         
-        // ✅ Load products with categories
+        //  Load products with categories
         $cartItems = CartItem::where('cart_id', $cart->id)
             ->with('product.category')
             ->get();
@@ -579,18 +579,18 @@ private function getAvailableCoupons($cartItems, $userId)
             ], 422);
         }
         
-        // ✅ NEW: Check if coupon applies to cart items
+        //  NEW: Check if coupon applies to cart items
         $applicableAmount = 0;
         $applicableCount = 0;
         
         if ($coupon->applies_to_all) {
-            // Applies to all products - OLD BEHAVIOR
+            // Applies to all products 
             $applicableAmount = $cartItems->sum(function($item) {
                 return $item->quantity * $item->final_price;
             });
             $applicableCount = $cartItems->count();
         } else {
-            // Check categories - NEW BEHAVIOR
+            // Check categories 
             $couponCategoryIds = $coupon->categories->pluck('id')->toArray();
             
             foreach ($cartItems as $item) {
@@ -635,7 +635,7 @@ private function getAvailableCoupons($cartItems, $userId)
             return $item->quantity * $item->final_price;
         });
         
-        // ✅ FIX: Calculate tax AFTER discount, not before
+        //  FIX: Calculate tax AFTER discount
         $subtotalAfterDiscount = max(0, $fullSubtotal - $discount);
         $tax = $subtotalAfterDiscount * 0.10;
         $total = $subtotalAfterDiscount + $tax;
@@ -667,7 +667,7 @@ public function removeCoupon()
     // Remove coupon from session
     session()->forget('applied_coupon');
     
-    // ✅ Calculate totals WITHOUT coupon (for AJAX response)
+    // Calculate totals WITHOUT coupon (for AJAX response)
     $cart = Cart::where('user_id', $user->id)->first();
     
     if ($cart) {
@@ -702,9 +702,7 @@ public function removeCoupon()
     /**
      * Checkout page
      */
-/**
- * Checkout page - UPDATED with available coupons
- */
+
 public function checkout()
 {
     $user = Auth::user();
@@ -715,9 +713,9 @@ public function checkout()
         return redirect()->route('customer.cart')->with('error', 'Your cart is empty');
     }
 
-    // ✅ UPDATED: Load with category for coupon checking
+    //  UPDATED: Load with category for coupon checking
     $cartItems = CartItem::where('cart_id', $cart->id)
-        ->with(['product.images', 'product.vendor', 'product.category', 'variant']) // ✅ Added category
+        ->with(['product.images', 'product.vendor', 'product.category', 'variant']) //  Added category
         ->get();
 
     // Calculate subtotal
@@ -725,7 +723,7 @@ public function checkout()
         return $item->quantity * $item->final_price;
     });
     
-    // ✅ NEW: Get available coupons for checkout page
+    //  NEW: Get available coupons for checkout page
     $availableCoupons = $this->getAvailableCoupons($cartItems, $user->id);
     
     // Get applied coupon from session
@@ -740,7 +738,7 @@ public function checkout()
             session()->forget('applied_coupon');
             $appliedCoupon = null;
         } else {
-            // ✅ UPDATED: Use the discount from session (already calculated correctly)
+            //  UPDATED: Use the discount from session (already calculated correctly)
             $couponDiscount = $appliedCoupon['discount'];
         }
     }
@@ -760,7 +758,7 @@ $total = $subtotalAfterDiscount + $tax;
 
     $addresses = UserAddress::where('user_id', $user->id)->get()->toArray();
 
-    // ✅ UPDATED: Pass availableCoupons to view
+    //  UPDATED: Pass availableCoupons to view
     return view('customer.checkout', compact('cart', 'addresses', 'appliedCoupon', 'availableCoupons'));
 }
 
@@ -833,11 +831,11 @@ public function placeOrder(Request $request)
         $shippingCost = 0;
         $grandTotal = $totalAmount - $couponDiscount + $taxAmount + $shippingCost;
 
-        // ✅ FIXED: Create order with order_number
+        // FIXED: Create order with order_number
         $order = Order::create([
             'user_id' => $user->id,
             'vendor_id' => $vendorId,
-            'order_number' => 'ORD-' . strtoupper(uniqid()),  // ✅ ADDED THIS LINE
+            'order_number' => 'ORD-' . strtoupper(uniqid()),  //  ADDED 
             'total_amount' => $totalAmount,
             'discount_total' => $discountTotal,
             'coupon_id' => $coupon ? $coupon->id : null,
@@ -888,9 +886,7 @@ public function placeOrder(Request $request)
             }
         }
 
-        // ⭐ REMOVED: Vendor earnings should NOT be added here
-        // Earnings are added when order status is changed to "shipped"
-        // See VendorController::updateOrderStatus() method
+       
         
         // Record coupon usage
         if ($coupon) {
@@ -1108,7 +1104,7 @@ public function cancelOrder(Request $request, $id)
         $order->status = Order::STATUS_CANCELLED;
         $order->save();
 
-        // ✅ NEW: Adjust Vendor Earnings
+        //  NEW: Adjust Vendor Earnings
         // Vendor loses the refunded amount from their total earnings
         if ($refundAmount > 0 && $order->vendor) {
             // Deduct the refund amount from vendor's total earnings

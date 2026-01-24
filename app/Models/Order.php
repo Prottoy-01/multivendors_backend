@@ -49,7 +49,7 @@ class Order extends Model
         'coupon_discount' => 'decimal:2',
     ];
 
-    /* ================= Relationships ================= */
+    /*  Relationships */
 
     public function items()
     {
@@ -76,7 +76,7 @@ class Order extends Model
         return $this->hasOne(Payment::class);
     }
 
-    // ✅ NEW: Cancellation relationship
+    //  NEW: Cancellation relationship
     public function cancellation()
     {
         return $this->hasOne(OrderCancellation::class);

@@ -365,7 +365,19 @@ class PaymentController extends Controller
                             'vendor_id' => $vendorId,
                             'coupon_discount' => $vendorCouponDiscount,
                         ]),
-                    ]);
+                    ]);$vendor = \App\Models\Vendor::find($vendorId);
+if ($vendor) {
+    $vendor->increment('total_earnings', $vendorTotal);
+    
+    \Log::info('Vendor earnings added for card payment', [
+        'order_id' => $order->id,
+        'vendor_id' => $vendorId,
+        'amount_added' => $vendorTotal,
+        'payment_method' => 'card',
+        'new_total_earnings' => $vendor->fresh()->total_earnings,
+        'timestamp' => now()
+    ]);
+}
                 }
                 
                 // Record coupon usage (only once for main order)

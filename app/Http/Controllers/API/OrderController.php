@@ -19,12 +19,12 @@ class OrderController extends Controller
     {
         $user = $request->user();
 
-        /* ================== 🔹 STEP 1: VALIDATE ADDRESS ================== */
+        /*  STEP 1: VALIDATE ADDRESS */
         $request->validate([
             'address_id' => 'required|exists:user_addresses,id',
         ]);
 
-        /* ================== 🔹 STEP 2: VERIFY ADDRESS BELONGS TO USER ================== */
+        /*  STEP 2: VERIFY ADDRESS BELONGS TO USER  */
         $address = $user->addresses()
                         ->where('id', $request->address_id)
                         ->first();
@@ -33,7 +33,7 @@ class OrderController extends Controller
             return response()->json(['message' => 'Invalid address'], 403);
         }
 
-        // 🐛 FIX: Verify all required address fields are present
+        //  FIX: Verify all required address fields are present
         if (empty($address->recipient_name) || empty($address->phone) || 
             empty($address->address_line) || empty($address->city)) {
             return response()->json([
@@ -42,7 +42,7 @@ class OrderController extends Controller
         }
 
         // Get user's cart with items and product details
-        $cart = Cart::with('items.product.vendor')  // 🐛 FIX: Also load vendor relationship
+        $cart = Cart::with('items.product.vendor')  //  FIX: Also load vendor relationship
                     ->where('user_id', $user->id)
                     ->first();
 
@@ -156,10 +156,7 @@ class OrderController extends Controller
 
     /**
      * Vendor/Admin: Update order status
-     * 
-     * ⭐ KEY CHANGE: Vendor earnings are now tracked when order is SHIPPED
-     * This is the critical point where revenue enters the vendor dashboard
-     * If order is later cancelled, the refund will be deducted
+    
      */
     public function updateStatus(Request $request, $id)
     {
@@ -178,24 +175,36 @@ class OrderController extends Controller
             $order->status = $newStatus;
             $order->save();
             
-            // ⭐⭐⭐ CRITICAL FIX: Track vendor earnings when order is SHIPPED
-            // This ensures the revenue shows in vendor dashboard immediately
-            // When customer cancels after shipping, the 40% refund will be deducted from this
-            if ($oldStatus !== Order::STATUS_SHIPPED && $newStatus === Order::STATUS_SHIPPED) {
-                $vendor = $order->vendor;
-                $orderAmount = $order->grand_total ?? $order->total_amount;
-                
-                // Add to vendor's total_earnings
-                $vendor->increment('total_earnings', $orderAmount);
-                
-                Log::info('Vendor earnings updated on order shipped', [
-                    'order_id' => $order->id,
-                    'vendor_id' => $vendor->id,
-                    'amount_added' => $orderAmount,
-                    'new_total_earnings' => $vendor->fresh()->total_earnings,
-                    'timestamp' => now()
-                ]);
-            }
+// BUT: Only for COD orders! Card payments already added earnings when payment was made
+if ($oldStatus !== Order::STATUS_SHIPPED && $newStatus === Order::STATUS_SHIPPED) {
+    $vendor = $order->vendor;
+    $orderAmount = $order->grand_total ?? $order->total_amount;
+    
+    
+    // Card payments already added earnings when payment was successful
+    if ($order->payment_method === 'cash_on_delivery') {
+        // Add to vendor's total_earnings
+        $vendor->increment('total_earnings', $orderAmount);
+        
+        Log::info('Vendor earnings updated on order shipped (COD)', [
+            'order_id' => $order->id,
+            'vendor_id' => $vendor->id,
+            'payment_method' => $order->payment_method,
+            'amount_added' => $orderAmount,
+            'new_total_earnings' => $vendor->fresh()->total_earnings,
+            'timestamp' => now()
+        ]);
+    } else {
+        // Card payment - earnings already added when payment was made
+        Log::info('Order shipped but earnings already added (Card payment)', [
+            'order_id' => $order->id,
+            'vendor_id' => $vendor->id,
+            'payment_method' => $order->payment_method,
+            'total_earnings' => $vendor->total_earnings,
+            'timestamp' => now()
+        ]);
+    }
+}
             
             DB::commit();
             
