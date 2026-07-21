@@ -7,11 +7,7 @@ use App\Http\Controllers\Web\CustomerController;
 use App\Http\Controllers\Web\VendorController;
 use App\Http\Controllers\Web\AdminController;
 
-/*
-|--------------------------------------------------------------------------
-| Public Routes
-|--------------------------------------------------------------------------
-*/
+
 
 // Home & Products
 Route::get('/', [HomeController::class, 'index'])->name('home');
@@ -31,11 +27,7 @@ Route::middleware('guest')->group(function () {
 
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
-/*
-|--------------------------------------------------------------------------
-| Customer Routes
-|--------------------------------------------------------------------------
-*/
+
 Route::middleware(['auth'])->prefix('customer')->name('customer.')->group(function () {
     Route::get('/dashboard', [CustomerController::class, 'dashboard'])->name('dashboard');
     Route::get('/orders', [CustomerController::class, 'orders'])->name('orders');
@@ -61,12 +53,7 @@ Route::post('/remove-coupon', [CustomerController::class, 'removeCoupon'])->name
 Route::post('/orders/{id}/cancel', [CustomerController::class, 'cancelOrder'])->name('orders.cancel');
     Route::get('/wallet', [CustomerController::class, 'wallet'])->name('wallet');
 
-    //add payment route
-    // Payment routes
-// Route::post('/payment/stripe', [CustomerController::class, 'processStripePayment'])->name('payment.stripe');
-// Route::get('/payment/success/{order}', [CustomerController::class, 'success'])->name('payment.success');
-// Route::get('/payment/failed', [CustomerController::class, 'failed'])->name('payment.failed');
-// ✅ NEW: Stripe Checkout Routes
+   
 
     
 });
@@ -77,11 +64,7 @@ Route::middleware(['auth'])->group(function () {
    Route::get('/payment/success', [\App\Http\Controllers\Web\PaymentController::class, 'success'])->name('payment.success');
     Route::get('/payment/failed', [\App\Http\Controllers\Web\PaymentController::class, 'failed'])->name('payment.failed');
 });
-/*
-|--------------------------------------------------------------------------
-| Vendor Routes (Using your existing VendorMiddleware)
-|--------------------------------------------------------------------------
-*/
+
 Route::middleware(['auth', \App\Http\Middleware\VendorMiddleware::class])->prefix('vendor')->name('vendor.')->group(function () {
     Route::get('/dashboard', [VendorController::class, 'dashboard'])->name('dashboard');
     Route::get('/products', [VendorController::class, 'products'])->name('products.index');
@@ -95,28 +78,23 @@ Route::middleware(['auth', \App\Http\Middleware\VendorMiddleware::class])->prefi
     Route::get('/analytics', [VendorController::class, 'analytics'])->name('analytics');
     Route::get('/profile', [VendorController::class, 'profile'])->name('profile');
     Route::post('/profile', [VendorController::class, 'updateProfile'])->name('profile.update');
-    // Variant management routes - ✅ ADD THESE
+    
     Route::post('/products/{product}/variants', [VendorController::class, 'storeVariant'])->name('products.variants.store');
     Route::put('/products/{product}/variants/{variant}', [VendorController::class, 'updateVariant'])->name('products.variants.update');
     Route::delete('/products/{product}/variants/{variant}', [VendorController::class, 'deleteVariant'])->name('products.variants.delete');
 });
 
-/*
-|--------------------------------------------------------------------------
-| Admin Routes (Using your existing AdminMiddleware)
-|--------------------------------------------------------------------------
-*/
 Route::middleware(['auth', \App\Http\Middleware\AdminMiddleware::class])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
     Route::get('/users', [AdminController::class, 'users'])->name('users');
-        Route::post('/users/{id}/activate', [AdminController::class, 'activateUser'])->name('users.activate'); // ✅ ADD
-    Route::post('/users/{id}/suspend', [AdminController::class, 'suspendUser'])->name('users.suspend'); // ✅ ADD
-    Route::post('/users/{id}/ban', [AdminController::class, 'banUser'])->name('users.ban'); // ✅ ADD
+        Route::post('/users/{id}/activate', [AdminController::class, 'activateUser'])->name('users.activate'); 
+    Route::post('/users/{id}/suspend', [AdminController::class, 'suspendUser'])->name('users.suspend'); 
+    Route::post('/users/{id}/ban', [AdminController::class, 'banUser'])->name('users.ban'); 
     Route::get('/vendors', [AdminController::class, 'vendors'])->name('vendors');
     Route::post('/vendors/{id}/approve', [AdminController::class, 'approveVendor'])->name('vendors.approve');
-        Route::post('/vendors/{id}/reject', [AdminController::class, 'rejectVendor'])->name('vendors.reject'); // ✅ ADD THIS
-        Route::get('/vendors/{id}/details', [AdminController::class, 'vendorDetails'])->name('vendors.details'); // ✅ ADD THIS
-        Route::delete('/products/{id}', [AdminController::class, 'deleteProduct'])->name('products.delete'); // ✅ ADD THIS
+        Route::post('/vendors/{id}/reject', [AdminController::class, 'rejectVendor'])->name('vendors.reject'); 
+        Route::get('/vendors/{id}/details', [AdminController::class, 'vendorDetails'])->name('vendors.details');
+        Route::delete('/products/{id}', [AdminController::class, 'deleteProduct'])->name('products.delete'); 
     Route::get('/categories', [AdminController::class, 'categories'])->name('categories');
     Route::post('/categories', [AdminController::class, 'storeCategory'])->name('categories.store');
     Route::put('/categories/{id}', [AdminController::class, 'updateCategory'])->name('categories.update');
@@ -130,7 +108,7 @@ Route::middleware(['auth', \App\Http\Middleware\AdminMiddleware::class])->prefix
     // Coupons management - UPDATED
 Route::get('/coupons', [AdminController::class, 'coupons'])->name('coupons');
 Route::post('/coupons', [AdminController::class, 'storeCoupon'])->name('coupons.store');
-Route::put('/coupons/{id}', [AdminController::class, 'updateCoupon'])->name('coupons.update'); // ✅ NEW
-Route::post('/coupons/{id}/toggle', [AdminController::class, 'toggleCoupon'])->name('coupons.toggle'); // ✅ NEW
-Route::delete('/coupons/{id}', [AdminController::class, 'deleteCoupon'])->name('coupons.delete'); // ✅ NEW
+Route::put('/coupons/{id}', [AdminController::class, 'updateCoupon'])->name('coupons.update'); 
+Route::post('/coupons/{id}/toggle', [AdminController::class, 'toggleCoupon'])->name('coupons.toggle'); 
+Route::delete('/coupons/{id}', [AdminController::class, 'deleteCoupon'])->name('coupons.delete'); 
 });

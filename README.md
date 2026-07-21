@@ -1,59 +1,288 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# 🛒 MultiVendor E-Commerce Backend
+
+A full-featured **Multi-Vendor E-Commerce Backend** built with **Laravel**, **PHP**, and **MySQL**. The platform enables multiple vendors to sell products through a single marketplace while customers can browse products, apply coupons, and place orders. Administrators have full control over vendors, products, categories, orders, and promotional campaigns.
+
+> Developed as a university project to demonstrate real-world backend development using the Laravel framework.
+
+---
+
+## ✨ Features
+
+### 👤 Customer
+
+- User Registration & Login
+- Browse Products
+- Search Products
+- View Product Details
+- Shopping Cart
+- Apply Coupon Codes
+- Checkout Process
+- Order History
+- Profile Management
+
+---
+
+### 🏪 Vendor
+
+- Vendor Registration & Login
+- Vendor Dashboard
+- Product Management (CRUD)
+- Inventory Management
+- Upload Product Images
+- Apply Product Discounts
+- Manage Customer Orders
+- Sales Overview
+
+---
+
+### 🛠️ Admin
+
+- Secure Admin Dashboard
+- Manage Vendors
+- Manage Customers
+- Manage Products
+- Category Management
+- Brand Management
+- Coupon Management (Create, Update & Delete)
+- Order Monitoring
+- User Management
+- Marketplace Administration
+
+---
+
+# 🛠 Tech Stack
+
+| Technology | Description |
+|------------|-------------|
+| Laravel | PHP Framework |
+| PHP | Backend Language |
+| MySQL | Database |
+| Blade | Template Engine |
+| HTML5 | Markup |
+| CSS3 | Styling |
+| Bootstrap | Responsive UI |
+| JavaScript | Client-side Functionality |
+| Composer | Dependency Management |
+| Laragon | Local Development Environment |
+
+---
+
+# 🏗 Project Structure
+
+```text
+app/
+bootstrap/
+config/
+database/
+public/
+resources/
+routes/
+storage/
+vendor/
+```
+
+---
+
+# 🗄 Database Modules
+
+- Users
+- Vendors
+- Customers
+- Products
+- Categories
+- Brands
+- Shopping Cart
+- Orders
+- Coupons
+- Discounts
+- Authentication
+
+---
+
+# 🔐 Authentication
+
+- User Authentication
+- Vendor Authentication
+- Admin Authentication
+- Role-Based Authorization
+- Middleware Protection
+- Password Encryption
+
+---
+
+# 🚀 Installation
+
+## Clone Repository
+
+```bash
+git clone https://github.com/Prottoy-01/multivendors_backend.git
+```
+
+## Navigate to Project
+
+```bash
+cd multivendors_backend
+```
+
+## Install Dependencies
+
+```bash
+composer install
+```
+
+## Create Environment File
+
+```bash
+cp .env.example .env
+```
+
+## Generate Application Key
+
+```bash
+php artisan key:generate
+```
+
+## Configure Database
+
+Update your `.env` file.
+
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=your_database_name
+DB_USERNAME=root
+DB_PASSWORD=
+```
+
+## Run Migrations
+
+```bash
+php artisan migrate
+```
+
+If seeders are available:
+
+```bash
+php artisan db:seed
+```
+
+## Start Server
+
+```bash
+php artisan serve
+```
+
+Open:
+
+```
+http://127.0.0.1:8000
+```
+
+---
+
+# 📸 Project Screenshots
 
 <p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
+<img src="screenshots/Screenshot 2026-07-22 000722.png" width="90%">
 </p>
 
-## About Laravel
+<p align="center">
+<img src="screenshots/Screenshot 2026-07-22 000756.png" width="90%">
+</p>
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+<p align="center">
+<img src="screenshots/Screenshot 2026-07-22 000826.png" width="90%">
+</p>
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+<p align="center">
+<img src="screenshots/Screenshot 2026-07-22 000852.png" width="90%">
+</p>
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+<p align="center">
+<img src="screenshots/Screenshot 2026-07-22 001416.png" width="90%">
+</p>
 
-## Learning Laravel
+<p align="center">
+<img src="screenshots/Screenshot 2026-07-22 001513.png" width="90%">
+</p>
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+<p align="center">
+<img src="screenshots/Screenshot 2026-07-22 001607.png" width="90%">
+</p>
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+<p align="center">
+<img src="screenshots/Screenshot 2026-07-22 001643.png" width="90%">
+</p>
 
-## Laravel Sponsors
+<p align="center">
+<img src="screenshots/Screenshot 2026-07-22 001729.png" width="90%">
+</p>
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+<p align="center">
+<img src="screenshots/Screenshot 2026-07-22 002310.png" width="90%">
+</p>
 
-### Premium Partners
+<p align="center">
+<img src="screenshots/Screenshot 2026-07-22 002431.png" width="90%">
+</p>
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+<p align="center">
+<img src="screenshots/Screenshot 2026-07-22 002655.png" width="90%">
+</p>
 
-## Contributing
+<p align="center">
+<img src="screenshots/Screenshot 2026-07-22 002723.png" width="90%">
+</p>
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+---
 
-## Code of Conduct
+# 📚 Learning Outcomes
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Through this project, I gained practical experience in:
 
-## Security Vulnerabilities
+- Laravel MVC Architecture
+- PHP Backend Development
+- MySQL Database Design
+- Eloquent ORM
+- Authentication & Authorization
+- Role-Based Access Control (RBAC)
+- CRUD Operations
+- Middleware
+- Session Management
+- Coupon Management
+- Discount Management
+- Inventory Management
+- File Upload Handling
+- RESTful Routing
+- Backend Development Best Practices
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+---
 
-## License
+# 🔮 Future Improvements
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+- Online Payment Gateway Integration
+- REST API for Mobile Apps
+- Product Reviews & Ratings
+- Wishlist
+- Email Notifications
+- Sales Analytics Dashboard
+- Vendor Reports
+- Multi-language Support
+- Live Order Tracking
+
+---
+
+# 👨‍💻 Author
+
+**Tanvirul Haque**
+
+Bachelor of Science in Computer Science & Engineering
+
+GitHub: https://github.com/Prottoy-01
+
+---
+
+# 📄 License
+
+This project was developed for educational and portfolio purposes.
