@@ -1,8 +1,8 @@
 # 🛒 MultiVendor E-Commerce Backend
 
-A full-featured **Multi-Vendor E-Commerce Backend** built with **Laravel**, **PHP**, and **Laragon**. The platform enables multiple vendors to sell products through a single marketplace while customers can browse products, apply coupons, and place orders. Administrators have full control over vendors, products, categories, orders, and promotional campaigns.
+A full-featured **Multi-Vendor E-Commerce ** built with **Laravel**, **PHP**, and **Laragon**. The platform enables multiple vendors to sell products through a single marketplace while customers can browse products, apply coupons, and place orders. Administrators have full control over vendors, products, categories, orders, and promotional campaigns.
 
-> Developed as a university project to demonstrate real-world backend development using the Laravel framework.
+> Developed as a university project to demonstrate practical software development skills by building a complete multi-vendor e-commerce platform using the Laravel framework.
 
 ---
 
@@ -55,7 +55,6 @@ A full-featured **Multi-Vendor E-Commerce Backend** built with **Laravel**, **PH
 | Technology | Description |
 |------------|-------------|
 | Laravel | PHP Framework |
-| PHP | Backend Language |
 | MySQL | Database |
 | Blade | Template Engine |
 | HTML5 | Markup |
@@ -269,13 +268,12 @@ Through this project, I gained practical experience in:
 
 # 👨‍💻 Author
 
-**Tanvirul Haque**
+**Tanvirul Haque Prottoy**
 
 
-GitHub: https://github.com/Prottoy-01
 
 ---
 
 # 📄 License
 
-This project was developed for educational and portfolio purposes.
+This project is provided solely for educational, and learning purposes. Any unauthorized commercial use, reproduction, distribution, or modification of this project without the prior written consent of the author is strictly prohibited.
