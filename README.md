@@ -276,4 +276,4 @@ Through this project, I gained practical experience in:
 
 # 📄 License
 
-This project is provided solely for educational, and learning purposes. Any unauthorized commercial use, reproduction, distribution, or modification of this project without the prior written consent of the author is strictly prohibited.
+This project is provided solely for educational and learning purposes. Any unauthorized commercial use, reproduction, distribution, or modification of this project without the prior permission of the author is strictly prohibited.
